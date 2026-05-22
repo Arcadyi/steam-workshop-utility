@@ -99,7 +99,6 @@ pub async fn fetch_workshop_metadata_batch(
 pub async fn open_uri(uri: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use windows_sys::Win32::Foundation::HWND;
         use windows_sys::Win32::UI::Shell::ShellExecuteW;
         use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
@@ -108,7 +107,7 @@ pub async fn open_uri(uri: &str) -> Result<(), String> {
 
         let result = unsafe {
             ShellExecuteW(
-                0 as HWND,
+                0,
                 verb.as_ptr(),
                 uri_w.as_ptr(),
                 std::ptr::null(),

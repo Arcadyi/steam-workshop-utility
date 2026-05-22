@@ -32,7 +32,6 @@ reqwest = { version = "0.13", features = ["json", "form"] }
 open = "5.3.2"
 chrono = "0.4.44"
 serde_json = "1.0.149"
-windows-sys = "0.61.2"
 
 
 [target.'cfg(windows)'.dependencies]

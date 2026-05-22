@@ -82,12 +82,8 @@ jobs:
           </component>
           EOF
 
-          # Placeholder icon — replace with your actual icon if you have one as a PNG
-          # If you have an SVG icon embedded in the binary you may want to export it here
-          if [ -f "data/icons/com.arcadyi.steam_workshop_utility.png" ]; then
-            cp data/icons/com.arcadyi.steam_workshop_utility.png \
-               AppDir/usr/share/icons/hicolor/256x256/apps/com.arcadyi.steam_workshop_utility.png
-          fi
+          cp resources/icons/appicon.png \
+          AppDir/usr/share/icons/hicolor/256x256/apps/com.arcadyi.steam_workshop_utility.png
 
       - name: Download linuxdeploy
         run: |

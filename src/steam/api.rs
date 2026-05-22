@@ -107,7 +107,7 @@ pub async fn open_uri(uri: &str) -> Result<(), String> {
 
         let result = unsafe {
             ShellExecuteW(
-                0,
+                std::ptr::null_mut(),
                 verb.as_ptr(),
                 uri_w.as_ptr(),
                 std::ptr::null(),
@@ -116,6 +116,7 @@ pub async fn open_uri(uri: &str) -> Result<(), String> {
             )
         };
 
+        let result = result as isize;
         if result <= 32 {
             return Err(format!("ShellExecuteW failed: {}", result));
         }

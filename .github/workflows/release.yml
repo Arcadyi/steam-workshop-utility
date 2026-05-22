@@ -136,7 +136,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build release binary
-        run: cargo build --release --target x86_64-pc-windows-msvc --no-default-features --features about,single-instance,wgpu
+        run: cargo build --release --target x86_64-pc-windows-msvc
 
       - name: Rename artifact
         run: |

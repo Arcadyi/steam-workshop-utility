@@ -27,11 +27,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "accesskit"
+version = "0.22.0"
+source = "git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14#cef3a95c18383aff73faf651e5ce4d45ce8cc4c2"
+dependencies = [
+ "uuid",
+]
+
+[[package]]
 name = "accesskit_atspi_common"
 version = "0.15.0"
-source = "git+https://github.com/wash2/accesskit?tag=cosmic-0.14#f0599eed5f18111228266fe3f28991cc48b5964f"
+source = "git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14#cef3a95c18383aff73faf651e5ce4d45ce8cc4c2"
 dependencies = [
- "accesskit",
+ "accesskit 0.22.0 (git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14)",
  "accesskit_consumer",
  "atspi-common",
  "serde",
@@ -41,18 +49,18 @@ dependencies = [
 [[package]]
 name = "accesskit_consumer"
 version = "0.32.0"
-source = "git+https://github.com/wash2/accesskit?tag=cosmic-0.14#f0599eed5f18111228266fe3f28991cc48b5964f"
+source = "git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14#cef3a95c18383aff73faf651e5ce4d45ce8cc4c2"
 dependencies = [
- "accesskit",
+ "accesskit 0.22.0 (git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14)",
  "hashbrown 0.16.1",
 ]
 
 [[package]]
 name = "accesskit_macos"
 version = "0.23.0"
-source = "git+https://github.com/wash2/accesskit?tag=cosmic-0.14#f0599eed5f18111228266fe3f28991cc48b5964f"
+source = "git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14#cef3a95c18383aff73faf651e5ce4d45ce8cc4c2"
 dependencies = [
- "accesskit",
+ "accesskit 0.22.0 (git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14)",
  "accesskit_consumer",
  "hashbrown 0.16.1",
  "objc2 0.5.2",
@@ -63,9 +71,9 @@ dependencies = [
 [[package]]
 name = "accesskit_unix"
 version = "0.18.0"
-source = "git+https://github.com/wash2/accesskit?tag=cosmic-0.14#f0599eed5f18111228266fe3f28991cc48b5964f"
+source = "git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14#cef3a95c18383aff73faf651e5ce4d45ce8cc4c2"
 dependencies = [
- "accesskit",
+ "accesskit 0.22.0 (git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14)",
  "accesskit_atspi_common",
  "atspi",
  "futures-lite",
@@ -78,9 +86,9 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.30.0"
-source = "git+https://github.com/wash2/accesskit?tag=cosmic-0.14#f0599eed5f18111228266fe3f28991cc48b5964f"
+source = "git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14#cef3a95c18383aff73faf651e5ce4d45ce8cc4c2"
 dependencies = [
- "accesskit",
+ "accesskit 0.22.0 (git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14)",
  "accesskit_consumer",
  "hashbrown 0.16.1",
  "static_assertions",
@@ -91,9 +99,9 @@ dependencies = [
 [[package]]
 name = "accesskit_winit"
 version = "0.30.0"
-source = "git+https://github.com/wash2/accesskit?tag=cosmic-0.14#f0599eed5f18111228266fe3f28991cc48b5964f"
+source = "git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14#cef3a95c18383aff73faf651e5ce4d45ce8cc4c2"
 dependencies = [
- "accesskit",
+ "accesskit 0.22.0 (git+https://github.com/pyroraptor07/accesskit?branch=iced-0.14)",
  "accesskit_macos",
  "accesskit_unix",
  "accesskit_windows",
@@ -2182,7 +2190,7 @@ name = "iced_accessibility"
 version = "0.1.0"
 source = "git+https://github.com/pop-os/libcosmic.git#8fa6a01d049905ce99eb9adf8415b2fa73611818"
 dependencies = [
- "accesskit",
+ "accesskit 0.22.0 (git+https://github.com/wash2/accesskit?tag=cosmic-0.14)",
  "accesskit_winit",
 ]
 

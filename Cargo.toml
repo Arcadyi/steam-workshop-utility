@@ -40,6 +40,9 @@ features = [
     "xdg-portal",      # xdg portal dialogs on Linux
 ]
 
+[patch."https://github.com/wash2/accesskit"]
+accesskit_winit = { git = "https://github.com/pyroraptor07/accesskit", branch = "iced-0.14" }
+
 # Uncomment to test a locally-cloned libcosmic:
 # [patch.'https://github.com/pop-os/libcosmic']
 # libcosmic = { path = "../libcosmic" }

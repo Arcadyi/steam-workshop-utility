@@ -463,9 +463,7 @@ impl cosmic::Application for AppModel {
 
             Message::OpenSteam { appid, item_id } => {
                 let url = format!("steam://url/CommunityFilePage/{}", item_id);
-                if let Err(e) = open::that_detached(&url) {
-                    eprintln!("Failed to open Steam page for {}/{}: {e}", appid, item_id);
-                }
+                let _ = open_uri(&url);
             }
 
             Message::RefreshGame(appid) => {

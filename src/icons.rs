@@ -1,0 +1,7 @@
+pub const APP_ICON: &[u8] = include_bytes!("../resources/icons/steam.svg");
+pub const ICON_FOLDER: &[u8] = include_bytes!("../resources/icons/folder.svg");
+pub const ICON_STEAM: &[u8] = include_bytes!("../resources/icons/steam.svg");
+pub const ICON_GAME: &[u8] = include_bytes!("../resources/icons/game.svg");
+pub const ICON_CHECK: &[u8] = include_bytes!("../resources/icons/check.svg");
+pub const ICON_CROSS: &[u8] = include_bytes!("../resources/icons/cross.svg");
+pub const ICON_QUESTION: &[u8] = include_bytes!("../resources/icons/question_mark.svg");

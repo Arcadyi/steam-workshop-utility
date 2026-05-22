@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::steam::api::try_fetch_image;
+use crate::steam::api::{open_uri, try_fetch_image};
 use crate::steam::library::{
     enrich_workshop_items_for_game, find_acf_path, get_games, get_workshop_entries,
     zero_acf_entries,
@@ -394,11 +394,15 @@ impl cosmic::Application for AppModel {
 
                         for id in &item_ids {
                             let uri = format!("steam://workshop_download_item/{}/{}", appid, id);
-                            open::that_detached(&uri).map_err(|e| e.to_string())?;
+                            open_uri(&uri).await?;
+
+                            // Windows may need a small delay
+                            #[cfg(target_os = "windows")]
+                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                         }
 
                         let uri = format!("steam://validate/{}", appid);
-                        open::that_detached(&uri).map_err(|e| e.to_string())?;
+                        open_uri(&uri).await?;
 
                         Ok::<(), String>(())
                     },

@@ -96,6 +96,22 @@ pub async fn fetch_workshop_metadata_batch(
     Ok(map)
 }
 
+pub async fn open_uri(uri: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", uri])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        return Ok(());
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        open::that_detached(uri).map_err(|e| e.to_string())
+    }
+}
+
 pub async fn try_fetch_image(client: &reqwest::Client, url: &str) -> Option<widget::image::Handle> {
     let resp = client
         .get(url)

@@ -1,6 +1,6 @@
 [package]
 name = "steam-workshop-utility"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2024"
 license = "GPL-3.0"
 description = "A Steam Workshop utility for the COSMIC™ desktop"

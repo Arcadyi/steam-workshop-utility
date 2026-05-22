@@ -99,13 +99,31 @@ pub async fn fetch_workshop_metadata_batch(
 pub async fn open_uri(uri: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", uri])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        use windows_sys::Win32::Foundation::HWND;
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let verb: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
+        let uri_w: Vec<u16> = uri.encode_utf16().chain(Some(0)).collect();
+
+        let result = unsafe {
+            ShellExecuteW(
+                0 as HWND,
+                verb.as_ptr(),
+                uri_w.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+
+        if result <= 32 {
+            return Err(format!("ShellExecuteW failed: {}", result));
+        }
+
         return Ok(());
     }
+
     #[cfg(not(target_os = "windows"))]
     {
         open::that_detached(uri).map_err(|e| e.to_string())

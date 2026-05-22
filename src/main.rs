@@ -12,7 +12,6 @@ fn main() -> cosmic::iced::Result {
             cosmic::iced::Limits::NONE
                 .min_width(500.0)
                 .min_height(300.0)
-                .max_width(1920.0),
         );
     cosmic::app::run::<app::AppModel>(settings, ())
 }

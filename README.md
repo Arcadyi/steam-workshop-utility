@@ -22,7 +22,8 @@ Built with [COSMIC](https://github.com/pop-os/libcosmic).
 
 ## Screenshots
 
-> _TODO_
+![1](resources/screenshots/1.png)
+![2](resources/screenshots/2.png)
 
 ---
 

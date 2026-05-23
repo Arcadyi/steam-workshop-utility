@@ -1,6 +1,6 @@
 [package]
 name = "steam-workshop-utility"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 license = "GPL-3.0"
 description = "A Steam Workshop utility for the COSMIC™ desktop"
@@ -34,6 +34,8 @@ chrono = "0.4.44"
 serde_json = "1.0.149"
 base64 = "0.22.1"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
 aes = "0.9.0"
 cbc = { version = "0.2.1", features = ["alloc"] }
 pbkdf2 = { version = "0.13.0", features = ["hmac"] }

@@ -1,10 +1,18 @@
-use aes::Aes256;
 use anyhow::{Context, Result};
-use cbc::cipher::{BlockModeDecrypt, KeyIvInit};
-use pbkdf2::pbkdf2_hmac;
 use rusqlite::Connection;
-use sha1::Sha1;
 use std::path::PathBuf;
+
+#[cfg(not(target_os = "windows"))]
+use {
+    aes::Aes128,
+    aes::Aes256,
+    cbc::cipher::{BlockModeDecrypt, KeyIvInit},
+    pbkdf2::pbkdf2_hmac,
+    sha1::Sha1,
+};
+
+#[cfg(target_os = "windows")]
+use windows::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
 
 #[derive(Debug, Clone)]
 pub struct SteamCookies {
@@ -31,27 +39,9 @@ fn get_cookie_db_path() -> Result<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
-fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
-    if encrypted.len() < 3 {
-        anyhow::bail!("Encrypted value too short");
-    }
-
-    let prefix = &encrypted[..3];
-    if prefix != b"v10" {
-        // No prefix = already plaintext
-        return Ok(String::from_utf8_lossy(encrypted).to_string());
-    }
-
-    let ciphertext = &encrypted[3..];
-    decrypt_dpapi(ciphertext)
-}
-
-#[cfg(target_os = "windows")]
 fn decrypt_dpapi(data: &[u8]) -> Result<String> {
-    use windows::Win32::Security::Cryptography::CryptUnprotectData;
+    use windows::Win32::Foundation::HLOCAL;
     use windows::Win32::System::Memory::LocalFree;
-    use windows::core::HLOCAL;
-    use windows::Win32::Security::Cryptography::CRYPT_INTEGER_BLOB;
 
     let mut input = CRYPT_INTEGER_BLOB {
         cbData: data.len() as u32,
@@ -70,13 +60,45 @@ fn decrypt_dpapi(data: &[u8]) -> Result<String> {
             &mut output,
         ).ok().context("CryptUnprotectData failed")?;
 
-        let bytes = std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec();
+        let bytes = std::slice::from_raw_parts(
+            output.pbData,
+            output.cbData as usize,
+        ).to_vec();
+
         LocalFree(HLOCAL(output.pbData as _));
+
         Ok(String::from_utf8_lossy(&bytes).to_string())
     }
 }
 
-fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
+#[cfg(not(target_os = "windows"))]
+fn get_keyring_password() -> Result<Vec<u8>> {
+    let candidates = [
+        ("application", "chrome"),
+        ("application", "chromium"),
+        ("application", "Steam"),
+    ];
+
+    for (attr_key, attr_val) in candidates {
+        let output = std::process::Command::new("secret-tool")
+            .args(["lookup", attr_key, attr_val])
+            .output();
+
+        if let Ok(out) = output {
+            if out.status.success() && !out.stdout.is_empty() {
+                let password = String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .to_string();
+                return Ok(password.into_bytes());
+            }
+        }
+    }
+
+    anyhow::bail!("No keyring password found via secret-tool")
+}
+
+#[cfg(not(target_os = "windows"))]
+fn decrypt_cookie_linux(encrypted: &[u8]) -> Result<String> {
     if encrypted.len() < 3 {
         anyhow::bail!("Encrypted value too short");
     }
@@ -86,58 +108,64 @@ fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
         return Ok(String::from_utf8_lossy(encrypted).to_string());
     }
 
+    let ciphertext = &encrypted[3..];
+    let iv = [b' '; 16];
+    let password = get_keyring_password().unwrap_or_else(|_| b"peanuts".to_vec());
+
+    // Try AES-128 first (v10), then AES-256 (v11)
+    let candidates_128: &[&[u8]] = &[password.as_slice(), b"peanuts", b""];
+    for pw in candidates_128 {
+        let mut key = [0u8; 16];
+        pbkdf2_hmac::<Sha1>(pw, b"saltysalt", 1, &mut key);
+
+        type Aes128CbcDec = cbc::Decryptor<Aes128>;
+        let decryptor = Aes128CbcDec::new(&key.into(), &iv.into());
+        let mut buf = ciphertext.to_vec();
+
+        if let Ok(decrypted) = decryptor
+            .decrypt_padded::<cbc::cipher::block_padding::Pkcs7>(&mut buf)
+        {
+            return Ok(String::from_utf8_lossy(decrypted).to_string());
+        }
+    }
+
+    let candidates_256: &[&[u8]] = &[password.as_slice(), b"peanuts", b""];
+    for pw in candidates_256 {
+        let mut key = [0u8; 32];
+        pbkdf2_hmac::<Sha1>(pw, b"saltysalt", 1, &mut key);
+
+        type Aes256CbcDec = cbc::Decryptor<Aes256>;
+        let decryptor = Aes256CbcDec::new(&key.into(), &iv.into());
+        let mut buf = ciphertext.to_vec();
+
+        if let Ok(decrypted) = decryptor
+            .decrypt_padded::<cbc::cipher::block_padding::Pkcs7>(&mut buf)
+        {
+            return Ok(String::from_utf8_lossy(decrypted).to_string());
+        }
+    }
+
+    anyhow::bail!("All decryption attempts failed")
+}
+
+fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
+    if encrypted.len() < 3 {
+        anyhow::bail!("Encrypted value too short");
+    }
+
     #[cfg(target_os = "windows")]
     {
-        let ciphertext = &encrypted[3..];
-        return decrypt_dpapi(ciphertext);
+        let prefix = &encrypted[..3];
+        // On Windows, v10 = DPAPI blob; no prefix = plaintext
+        if prefix == b"v10" || prefix == b"v11" {
+            return decrypt_dpapi(&encrypted[3..]);
+        }
+        return Ok(String::from_utf8_lossy(encrypted).to_string());
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        let ciphertext = &encrypted[3..];
-        let iv = [b' '; 16];
-
-        // v10 = AES-128 (16-byte key), v11 = AES-256 (32-byte key)
-        // but many CEF builds just always use 16-byte keys
-        let candidates: &[(&[u8], u32)] = &[
-            (b"peanuts", 1),
-            (b"", 1),
-        ];
-
-        // Try AES-128 first (most common for CEF v10)
-        for (pw, iterations) in candidates {
-            let mut key16 = [0u8; 16];
-            pbkdf2_hmac::<Sha1>(pw, b"saltysalt", *iterations, &mut key16);
-
-            use aes::Aes128;
-            type Aes128CbcDec = cbc::Decryptor<Aes128>;
-            let decryptor = Aes128CbcDec::new(&key16.into(), &iv.into());
-            let mut buf = ciphertext.to_vec();
-
-            if let Ok(decrypted) = decryptor
-                .decrypt_padded::<cbc::cipher::block_padding::Pkcs7>(&mut buf)
-            {
-                return Ok(String::from_utf8_lossy(decrypted).to_string());
-            }
-        }
-
-        // Fall back to AES-256
-        for (pw, iterations) in candidates {
-            let mut key32 = [0u8; 32];
-            pbkdf2_hmac::<Sha1>(pw, b"saltysalt", *iterations, &mut key32);
-
-            type Aes256CbcDec = cbc::Decryptor<Aes256>;
-            let decryptor = Aes256CbcDec::new(&key32.into(), &iv.into());
-            let mut buf = ciphertext.to_vec();
-
-            if let Ok(decrypted) = decryptor
-                .decrypt_padded::<cbc::cipher::block_padding::Pkcs7>(&mut buf)
-            {
-                return Ok(String::from_utf8_lossy(decrypted).to_string());
-            }
-        }
-
-        anyhow::bail!("All decryption attempts failed")
+        return decrypt_cookie_linux(encrypted);
     }
 }
 
@@ -177,10 +205,9 @@ pub fn get_steam_cookies() -> Result<SteamCookies> {
             value
         } else if !encrypted.is_empty() {
             match decrypt_cookie(&encrypted) {
-                Ok(v) => {
-                    v
-                }
-                Err(_e) => {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("'{}' decryption error: {}", name, e);
                     String::new()
                 }
             }

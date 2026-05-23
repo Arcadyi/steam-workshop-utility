@@ -64,7 +64,9 @@ pub struct AppModel {
     steam_cookies: Option<crate::steam::cookies::SteamCookies>,
     steam_cookies_error: Option<String>,
 
+    #[cfg(target_os = "windows")]
     steam_restart_needed: bool,
+    #[cfg(target_os = "windows")]
     steam_restart_in_progress: bool,
 }
 
@@ -153,8 +155,11 @@ pub enum Message {
     DirectSubscribeAll { appid: String, item_ids: Vec<String> },
     DirectSyncCollection { appid: String, collection_item_ids: Vec<String> },
 
+    #[cfg(target_os = "windows")]
     CheckSteamAndRestart,
+    #[cfg(target_os = "windows")]
     SteamKilled,
+    #[cfg(target_os = "windows")]
     SteamRestartDone(Result<crate::steam::cookies::SteamCookies, String>),
 }
 
@@ -215,7 +220,9 @@ impl cosmic::Application for AppModel {
             import_item_names: HashMap::new(),
             steam_cookies: None,
             steam_cookies_error: None,
+            #[cfg(target_os = "windows")]
             steam_restart_needed: false,
+            #[cfg(target_os = "windows")]
             steam_restart_in_progress: false,
         };
 
@@ -774,16 +781,20 @@ impl cosmic::Application for AppModel {
                     Ok(cookies) => {
                         self.steam_cookies = Some(cookies);
                         self.steam_cookies_error = None;
-                        self.steam_restart_needed = false;
+                        #[cfg(target_os = "windows")]
+                        {
+                            self.steam_restart_needed = false;
+                        }
                     }
                     Err(e) => {
                         self.steam_cookies = None;
                         self.steam_cookies_error = Some(e);
-                        // On Windows, a failed cookie read almost always means Steam is
-                        // holding a lock on the DB with stale data — prompt to restart
+                        // On Windows, failed cookie reads usually mean Steam holds a lock.
+                        // Prompt to restart only if Steam is actually running.
                         #[cfg(target_os = "windows")]
                         {
-                            self.steam_restart_needed = crate::utils::general::is_steam_running();
+                            self.steam_restart_needed =
+                                crate::utils::general::is_steam_running();
                         }
                     }
                 }
@@ -830,42 +841,60 @@ impl cosmic::Application for AppModel {
             Message::DirectActionComplete { item_id, result } => {
                 match result {
                     Ok(()) => {
-                        // Find the item's path before removing it from state
-                        let item_path = if let AppState::Loaded { items, .. } = &self.state {
-                            items.values()
-                                .flat_map(|v| v.iter())
-                                .find(|i| i.item_id == item_id)
-                                .map(|i| i.path.clone())
-                        } else {
-                            None
-                        };
+                        // Collect path and game info before mutating state
+                        let (item_path, game_entry) =
+                            if let AppState::Loaded { items, games, .. } = &self.state {
+                                let found = items
+                                    .iter()
+                                    .find_map(|(appid, game_items)| {
+                                        game_items
+                                            .iter()
+                                            .find(|i| i.item_id == item_id)
+                                            .map(|i| (i.path.clone(), games.get(appid).cloned()))
+                                    });
+                                found.map(|(p, g)| (Some(p), g)).unwrap_or((None, None))
+                            } else {
+                                (None, None)
+                            };
 
-                        // Delete the orphaned folder so it doesn't reappear on next scan
-                        if let Some(path) = item_path {
-                            if let Err(e) = std::fs::remove_dir_all(&path) {
-                                eprintln!("Failed to delete workshop folder {}: {}", path.display(), e);
+                        // Delete the orphaned folder — Steam won't do it on Windows
+                        if let Some(path) = &item_path {
+                            if let Err(e) = std::fs::remove_dir_all(path) {
+                                eprintln!(
+                                    "Failed to delete workshop folder {}: {}",
+                                    path.display(),
+                                    e
+                                );
                             }
                         }
 
-                        // Remove from in-memory state
+                        // Remove the stale ACF entries so Steam doesn't resurrect the item
+                        if let Some(game) = game_entry {
+                            if let Ok(acf_path) = find_acf_path(&game) {
+                                if let Err(e) = zero_acf_entries(&acf_path, &[item_id.clone()]) {
+                                    eprintln!("Failed to zero ACF entries for {}: {}", item_id, e);
+                                }
+                            }
+                        }
+
+                        // Remove from in-memory state immediately
                         if let AppState::Loaded { items, .. } = &mut self.state {
                             for game_items in items.values_mut() {
                                 game_items.retain(|i| i.item_id != item_id);
                             }
                         }
                     }
-                    Err(e) => eprintln!("Action failed for item {}: {}", item_id, e),
+                    Err(e) => eprintln!("Unsubscribe failed for item {}: {}", item_id, e),
                 }
             }
 
             Message::StartPollingGame(appid) => {
-                // Seed pending_item_ids with whatever is currently selected/pending
-                // We don't need to track specific items here, just poll for a while
                 self.polling = Some(PollingState {
                     appid: appid.clone(),
                     elapsed_secs: 0,
+                    // initial_item_count = 0 means RefreshComplete won't set redownload_complete
                     initial_item_count: 0,
-                    pending_item_ids: HashSet::new(), // no specific items to wait on
+                    pending_item_ids: HashSet::new(),
                 });
                 return self.update(Message::RefreshGame(appid));
             }
@@ -928,27 +957,22 @@ impl cosmic::Application for AppModel {
                 );
             }
 
+            #[cfg(target_os = "windows")]
             Message::CheckSteamAndRestart => {
-                #[cfg(target_os = "windows")]
-                {
-                    self.steam_restart_in_progress = true;
-                    return Task::perform(
-                        async {
-                            crate::utils::general::kill_steam()
-                                .map_err(|e| e.to_string())
-                        },
-                        |result| match result {
-                            Ok(()) => cosmic::Action::App(Message::SteamKilled),
-                            Err(e) => cosmic::Action::App(Message::ScanFailed(e)),
-                        },
-                    );
-                }
-                #[cfg(not(target_os = "windows"))]
-                {}
+                self.steam_restart_in_progress = true;
+                return Task::perform(
+                    async {
+                        crate::utils::general::kill_steam().map_err(|e| e.to_string())
+                    },
+                    |result| match result {
+                        Ok(()) => cosmic::Action::App(Message::SteamKilled),
+                        Err(e) => cosmic::Action::App(Message::ScanFailed(e)),
+                    },
+                );
             }
 
+            #[cfg(target_os = "windows")]
             Message::SteamKilled => {
-                // Now read cookies while Steam is fully closed
                 return Task::perform(
                     async {
                         crate::steam::cookies::get_steam_cookies()
@@ -958,6 +982,7 @@ impl cosmic::Application for AppModel {
                 );
             }
 
+            #[cfg(target_os = "windows")]
             Message::SteamRestartDone(result) => {
                 self.steam_restart_in_progress = false;
                 self.steam_restart_needed = false;
@@ -967,14 +992,12 @@ impl cosmic::Application for AppModel {
                         self.steam_cookies_error = None;
                     }
                     Err(e) => {
+                        eprintln!("Failed to read cookies after Steam restart: {}", e);
                         self.steam_cookies_error = Some(e);
                     }
                 }
                 // Re-launch Steam now that we have the cookies
-                #[cfg(target_os = "windows")]
-                {
-                    let _ = crate::utils::general::launch_steam();
-                }
+                let _ = crate::utils::general::launch_steam();
             }
         }
 
@@ -1453,10 +1476,10 @@ impl AppModel {
             )
             .push(
                 widget::tooltip(
-                widget::button::icon(from_svg_bytes(ICON_IMPORT))
-                    .on_press(Message::ToggleImportPanel),
-                widget::text::body("Use a code to import a collection."),
-                widget::tooltip::Position::Top,
+                    widget::button::icon(from_svg_bytes(ICON_IMPORT))
+                        .on_press(Message::ToggleImportPanel),
+                    widget::text::body("Use a code to import a collection."),
+                    widget::tooltip::Position::Top,
                 )
             )
             .push(sort_menu)
@@ -1793,23 +1816,29 @@ impl AppModel {
     fn view_status_bar(&self) -> Element<'_, Message> {
         let spacing = cosmic::theme::spacing();
 
+        // Windows-only: prompt to restart Steam if cookies couldn't be read
+        #[cfg(target_os = "windows")]
         if self.steam_restart_needed || self.steam_restart_in_progress {
             let inner: Element<'_, Message> = if self.steam_restart_in_progress {
                 widget::row::with_capacity(1)
-                    .push(widget::text::body(
-                        "Closing Steam and reading cookies... Steam will relaunch automatically."
-                    ).width(Length::Fill))
+                    .push(
+                        widget::text::body(
+                            "Closing Steam and reading cookies... Steam will relaunch automatically.",
+                        )
+                            .width(Length::Fill),
+                    )
                     .into()
             } else {
                 widget::row::with_capacity(2)
                     .push(
                         widget::text::body(
-                            "Some functions require reading Steam cookies. Restart Steam to load cookies?"
-                        ).width(Length::Fill)
+                            "Some functions require reading Steam cookies. Restart Steam to load cookies?",
+                        )
+                            .width(Length::Fill),
                     )
                     .push(
                         widget::button::suggested("Restart Steam")
-                            .on_press(Message::CheckSteamAndRestart)
+                            .on_press(Message::CheckSteamAndRestart),
                     )
                     .align_y(cosmic::iced::Alignment::Center)
                     .spacing(spacing.space_s)
@@ -1818,9 +1847,9 @@ impl AppModel {
 
             return widget::container(
                 widget::container(inner)
-                    .padding([spacing.space_s, spacing.space_s])
+                    .padding([spacing.space_s, spacing.space_m])
                     .width(Length::Fill)
-                    .style(|theme| container::Style {
+                    .style(|_| container::Style {
                         background: Some(Background::Color(Color::from_rgba(0.7, 0.5, 0.0, 0.25))),
                         border: Border {
                             radius: 8.0.into(),
@@ -1837,7 +1866,10 @@ impl AppModel {
 
         let inner: Element<'_, Message> = if self.redownload_complete {
             widget::row::with_capacity(2)
-                .push(widget::text::body("✓ All items redownloaded successfully.").width(Length::Fill))
+                .push(
+                    widget::text::body("✓ All items redownloaded successfully.")
+                        .width(Length::Fill),
+                )
                 .push(widget::button::standard("Dismiss").on_press(Message::DismissComplete))
                 .align_y(cosmic::iced::Alignment::Center)
                 .spacing(spacing.space_s)
@@ -1869,7 +1901,10 @@ impl AppModel {
             let total_progress = (resolution_progress + time_progress).min(100.0);
 
             let status_text = if elapsed == 0 {
-                format!("Waiting for Steam to start downloading {} item(s)...", pending_count)
+                format!(
+                    "Waiting for Steam to start downloading {} item(s)...",
+                    pending_count
+                )
             } else if pending_count == 0 {
                 "All items downloaded — verifying...".to_string()
             } else {
@@ -1883,7 +1918,10 @@ impl AppModel {
                 .push(
                     widget::row::with_capacity(2)
                         .push(widget::text::body(status_text).width(Length::Fill))
-                        .push(widget::button::standard("Stop watching").on_press(Message::StopPolling))
+                        .push(
+                            widget::button::standard("Stop watching")
+                                .on_press(Message::StopPolling),
+                        )
                         .align_y(cosmic::iced::Alignment::Center)
                         .spacing(spacing.space_s),
                 )
@@ -1899,7 +1937,7 @@ impl AppModel {
         };
 
         widget::container(inner)
-            .padding([spacing.space_s, spacing.space_m, spacing.space_m, spacing.space_m])
+            .padding([spacing.space_s, spacing.space_m])
             .width(Length::Fill)
             .into()
     }
@@ -2025,11 +2063,10 @@ impl AppModel {
                 None
             },
             |result| match result {
-                Some((appid, handle)) => cosmic::Action::App(Message::GameBannerLoaded { appid, handle }),
-                None => cosmic::Action::App(Message::GameBannerLoaded {
-                    appid: String::new(),
-                    handle: widget::image::Handle::from_bytes(vec![]),
-                }),
+                Some((appid, handle)) => {
+                    cosmic::Action::App(Message::GameBannerLoaded { appid, handle })
+                }
+                None => cosmic::Action::App(Message::Noop),
             },
         )
     }

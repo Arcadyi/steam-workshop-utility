@@ -65,7 +65,7 @@ fn decrypt_dpapi(data: &[u8]) -> Result<String> {
             output.cbData as usize,
         ).to_vec();
 
-        windows::Win32::Foundation::LocalFree(HLOCAL(output.pbData as _));
+        windows::Win32::Foundation::LocalFree(Some(HLOCAL(output.pbData as _)));
 
         Ok(String::from_utf8_lossy(&bytes).to_string())
     }

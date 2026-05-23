@@ -30,7 +30,7 @@ Built with [COSMIC](https://github.com/pop-os/libcosmic).
 
 ### Scanning
 
-On launch the app scans your Steam library directories for `steamapps/workshop/content/<appid>/` folders. For each game found it reads the local ACF manifest (`appworkshop_<appid>.acf`) to get item timestamps, then calls the Steam Web API to fetch remote timestamps and item metadata (names, preview images).
+On launch the app scans your Steam library directories for `steamapps/workshop/content/<_appid>/` folders. For each game found it reads the local ACF manifest (`appworkshop_<_appid>.acf`) to get item timestamps, then calls the Steam Web API to fetch remote timestamps and item metadata (names, preview images).
 
 ### Status Detection
 
@@ -40,8 +40,8 @@ An item is **Out of Date** when its remote timestamp is newer than the local one
 
 1. Deletes the local directory for each selected item
 2. Zeroes out the corresponding entries in the ACF manifest so Steam doesn't think the item is already present
-3. Opens `steam://workshop_download_item/<appid>/<itemid>` for each item
-4. Opens `steam://validate/<appid>` to prompt Steam to verify and queue downloads
+3. Opens `steam://workshop_download_item/<_appid>/<itemid>` for each item
+4. Opens `steam://validate/<_appid>` to prompt Steam to verify and queue downloads
 5. Polls the local filesystem every second, comparing timestamps until all items are resolved or 5 minutes elapse
 
 

@@ -123,13 +123,11 @@ pub enum Message {
 
     // Collection
     GenerateCollectionCode,
-    CollectionCodeGenerated(String),
     CopyCodeToClipboard(String),
 
     ToggleImportPanel,
     ImportCodeChanged(String),
     ImportCode,
-    ImportResolved(CollectionCode),
     ClearImport,
     ImportMetadataLoaded {
         collection: CollectionCode,
@@ -259,7 +257,7 @@ impl cosmic::Application for AppModel {
     }
 
     // No nav_model — we handle game selection ourselves
-    fn nav_model(&self) -> Option<&cosmic::widget::nav_bar::Model> {
+    fn nav_model(&self) -> Option<&widget::nav_bar::Model> {
         None
     }
 
@@ -503,7 +501,7 @@ impl cosmic::Application for AppModel {
                 }
             }
 
-            Message::OpenSteam { appid, item_id } => {
+            Message::OpenSteam { appid: _appid, item_id } => {
                 let url = format!("steam://url/CommunityFilePage/{}", item_id);
                 return Task::perform(
                     async move { open_uri(&url).await },
@@ -657,12 +655,6 @@ impl cosmic::Application for AppModel {
                 }
             }
 
-            Message::CollectionCodeGenerated(code) => {
-                self.generated_code = Some(code);
-                self.context_page = ContextPage::CollectionCode;
-                return self.update(Message::ToggleContextPage(ContextPage::CollectionCode));
-            }
-
             Message::CopyCodeToClipboard(code) => {
                 return cosmic::iced::clipboard::write(code);
             }
@@ -694,7 +686,7 @@ impl cosmic::Application for AppModel {
                     let all_ids: Vec<String> = collection_ids.iter()
                         .chain(installed_ids.iter())
                         .cloned()
-                        .collect::<std::collections::HashSet<_>>()
+                        .collect::<HashSet<_>>()
                         .into_iter()
                         .collect();
 
@@ -722,9 +714,6 @@ impl cosmic::Application for AppModel {
                 self.pending_import = Some(collection);
             }
 
-            Message::ImportResolved(collection) => {
-                self.pending_import = Some(collection);
-            }
             Message::ClearImport => {
                 self.pending_import = None;
                 self.import_error = false;

@@ -1,0 +1,34 @@
+import { Theme } from "../theme.slint";
+
+export component LoadingScreen inherits Rectangle {
+
+    in property <string> status-text: "Loading...";
+
+    background: Theme.background;
+
+    VerticalLayout {
+        spacing: Theme.spacing-lg;
+        alignment: center;
+
+        Image {
+            source: @image-url("../../resources/icons/steam.svg");
+            colorize: Theme.primary;
+            width: 128px;
+            height: 128px;
+            x: (parent.width - self.width) / 2;
+        }
+
+        Text {
+            horizontal-stretch: 1;
+
+            text: root.status-text;
+
+            color: Theme.text-primary;
+
+            font-size: Theme.font-heading;
+            font-weight: Theme.weight-semibold;
+
+            horizontal-alignment: center;
+        }
+    }
+}

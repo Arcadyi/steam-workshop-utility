@@ -1,0 +1,21 @@
+import { Theme } from "theme.slint";
+import { LoadingScreen } from "components/loading_screen.slint";
+
+export component AppWindow inherits Window {
+    no-frame: true; // Hides topbar
+    // TODO: Make custom hotbar
+    in-out property <bool> loading: true;
+
+    background: Theme.background;
+
+    if loading : LoadingScreen {
+        status-text: "Loading workshop data...";
+    }
+
+    if !loading : Rectangle {
+        Text {
+            text: "Main App";
+            color: Theme.text-primary;
+        }
+    }
+}

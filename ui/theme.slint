@@ -1,0 +1,166 @@
+export global Theme {
+
+    // Mode
+    in-out property <bool> dark-mode: true;
+
+    // Backgrounds / Surfaces
+    out property <color> background:
+        dark-mode ? #0f172a : #f3f4f6;
+
+    out property <color> background-elevated:
+        dark-mode ? #111827 : #ffffff;
+
+    out property <color> surface:
+        dark-mode ? #1e293b : #ffffff;
+
+    out property <color> surface-alt:
+        dark-mode ? #273449 : #e5e7eb;
+
+    out property <color> surface-hover:
+        dark-mode ? #334155 : #dbe4f0;
+
+    out property <color> surface-active:
+        dark-mode ? #3b475c : #cfd8e3;
+
+    // Borders
+    out property <color> border:
+        dark-mode ? #334155 : #d1d5db;
+
+    out property <color> border-strong:
+        dark-mode ? #475569 : #9ca3af;
+
+    // Text
+    out property <color> text-primary:
+        dark-mode ? #ffffff : #111827;
+
+    out property <color> text-secondary:
+        dark-mode ? #cbd5e1 : #4b5563;
+
+    out property <color> text-muted:
+        dark-mode ? #94a3b8 : #6b7280;
+
+    out property <color> text-inverse:
+        dark-mode ? #111827 : #ffffff;
+
+    // Accent / Brand
+    out property <color> primary:
+        dark-mode ? #3b82f6 : #2563eb;
+
+    out property <color> primary-hover:
+        dark-mode ? #60a5fa : #3b82f6;
+
+    out property <color> primary-pressed:
+        dark-mode ? #2563eb : #1d4ed8;
+
+    out property <color> primary-foreground:
+        #ffffff;
+
+    // Status Colors
+    out property <color> success:
+        dark-mode ? #22c55e : #16a34a;
+
+    out property <color> warning:
+        dark-mode ? #f59e0b : #d97706;
+
+    out property <color> danger:
+        dark-mode ? #ef4444 : #dc2626;
+
+    out property <color> danger-hover:
+        dark-mode ? #f87171 : #ef4444;
+
+    // Typography
+    out property <length> font-display: 34px;
+    out property <length> font-title: 28px;
+    out property <length> font-heading: 22px;
+    out property <length> font-subheading: 18px;
+    out property <length> font-body: 15px;
+    out property <length> font-small: 13px;
+    out property <length> font-tiny: 11px;
+
+    // Font Weights
+    out property <int> weight-normal:
+        400;
+
+    out property <int> weight-medium:
+        500;
+
+    out property <int> weight-semibold:
+        600;
+
+    out property <int> weight-bold:
+        700;
+
+    // Spacing
+    out property <length> spacing-xxs:
+        4px;
+
+    out property <length> spacing-xs:
+        8px;
+
+    out property <length> spacing-sm:
+        12px;
+
+    out property <length> spacing-md:
+        16px;
+
+    out property <length> spacing-lg:
+        24px;
+
+    out property <length> spacing-xl:
+        32px;
+
+    out property <length> spacing-xxl:
+        48px;
+
+    // Radius
+    out property <length> radius-xs:
+        8px;
+
+    out property <length> radius-sm:
+        12px;
+
+    out property <length> radius-md:
+        16px;
+
+    out property <length> radius-lg:
+        22px;
+
+    out property <length> radius-xl:
+        999px;
+
+    // Component Sizes
+    out property <length> topbar-height:
+        64px;
+
+    out property <length> sidebar-width:
+        260px;
+
+    out property <length> button-height:
+        44px;
+
+    out property <length> input-height:
+        44px;
+
+    out property <length> card-padding:
+        20px;
+
+    // Shadows (Opacity Tokens)
+    out property <float> shadow-soft:
+        dark-mode ? 0.25 : 0.08;
+
+    out property <float> shadow-medium:
+        dark-mode ? 0.35 : 0.14;
+
+    out property <float> shadow-strong:
+        dark-mode ? 0.5 : 0.2;
+
+    // Animation
+    out property <duration> animation-fast:
+        100ms;
+
+    out property <duration> animation-normal:
+        180ms;
+
+    out property <duration> animation-slow:
+        300ms;
+}

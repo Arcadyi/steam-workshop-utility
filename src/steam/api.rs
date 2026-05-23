@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use cosmic::widget;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -130,13 +129,13 @@ pub async fn open_uri(uri: &str) -> Result<(), String> {
     }
 }
 
-pub async fn try_fetch_image(client: &reqwest::Client, url: &str) -> Option<widget::image::Handle> {
-    let resp = client
-        .get(url)
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-        .ok()?;
-    let bytes = resp.bytes().await.ok()?;
-    Some(widget::image::Handle::from_bytes(bytes.to_vec()))
-}
+//pub async fn try_fetch_image(client: &reqwest::Client, url: &str) -> Option<widget::image::Handle> {
+//    let resp = client
+//        .get(url)
+//        .send()
+//        .await
+//        .and_then(|r| r.error_for_status())
+//        .ok()?;
+//    let bytes = resp.bytes().await.ok()?;
+//    Some(widget::image::Handle::from_bytes(bytes.to_vec()))
+//}

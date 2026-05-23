@@ -170,9 +170,12 @@ fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
 }
 
 pub fn get_steam_cookies() -> Result<SteamCookies> {
-    let db_path = get_cookie_db_path()?;
+    let db_path = get_cookie_db_path().context("Failed to get cookie DB path")?;
+    eprintln!("Cookie DB path: {}", db_path.display());
 
     let tmp_path = std::env::temp_dir().join("swu_cookies_tmp.db");
+    eprintln!("Temp path: {}", tmp_path.display());
+
     std::fs::copy(&db_path, &tmp_path)
         .context("Could not copy Steam cookie database")?;
 
@@ -200,18 +203,29 @@ pub fn get_steam_cookies() -> Result<SteamCookies> {
 
     for row in rows {
         let (name, value, encrypted) = row?;
+        eprintln!("Row: name={} value_len={} encrypted_len={}", name, value.len(), encrypted.len());
+
+        if !encrypted.is_empty() {
+            eprintln!("  encrypted prefix: {:?}", &encrypted[..encrypted.len().min(4)]);
+        }
 
         let resolved = if !value.is_empty() {
+            eprintln!("  using plaintext value");
             value
         } else if !encrypted.is_empty() {
+            eprintln!("  attempting decryption...");
             match decrypt_cookie(&encrypted) {
-                Ok(v) => v,
+                Ok(v) => {
+                    eprintln!("  decrypted ok, len={}", v.len());
+                    v
+                }
                 Err(e) => {
-                    eprintln!("'{}' decryption error: {}", name, e);
+                    eprintln!("  decryption error: {}", e);
                     String::new()
                 }
             }
         } else {
+            eprintln!("  no value and no encrypted_value");
             String::new()
         };
 
@@ -223,6 +237,9 @@ pub fn get_steam_cookies() -> Result<SteamCookies> {
     }
 
     let _ = std::fs::remove_file(&tmp_path);
+
+    eprintln!("session_id present: {}", session_id.is_some());
+    eprintln!("login_secure present: {}", login_secure.is_some());
 
     Ok(SteamCookies {
         session_id: session_id.context("sessionid cookie not found — are you logged into Steam?")?,

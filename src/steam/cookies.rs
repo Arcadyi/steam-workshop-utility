@@ -41,7 +41,7 @@ fn get_cookie_db_path() -> Result<PathBuf> {
 #[cfg(target_os = "windows")]
 fn decrypt_dpapi(data: &[u8]) -> Result<String> {
     use windows::Win32::Foundation::HLOCAL;
-    use windows::Win32::System::Memory::LocalFree;
+    use windows::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
 
     let mut input = CRYPT_INTEGER_BLOB {
         cbData: data.len() as u32,
@@ -65,7 +65,7 @@ fn decrypt_dpapi(data: &[u8]) -> Result<String> {
             output.cbData as usize,
         ).to_vec();
 
-        LocalFree(HLOCAL(output.pbData as _));
+        windows::Win32::Foundation::LocalFree(HLOCAL(output.pbData as _));
 
         Ok(String::from_utf8_lossy(&bytes).to_string())
     }

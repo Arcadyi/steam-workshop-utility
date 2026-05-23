@@ -34,6 +34,8 @@ chrono = "0.4.44"
 serde_json = "1.0.149"
 base64 = "0.22.1"
 rusqlite = { version = "0.39.0", features = ["bundled", "backup"] }
+aes-gcm = "0.11.0-rc.3"
+aead = "0.6.0-rc.10"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 aes = "0.9.0"
@@ -48,6 +50,8 @@ windows = { version = "0.62.2", features = [
     "Win32_Security_Cryptography",
     "Win32_System_Memory",
     "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_SystemServices",
 ] }
 
 # COSMIC UI framework

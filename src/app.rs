@@ -534,23 +534,26 @@ impl cosmic::Application for AppModel {
             }
 
             Message::RefreshGame(appid) => {
-                let appid_clone = appid.clone();
+                // Pull the game entry we already have — no disk read needed
+                let game_entry = if let AppState::Loaded { games, .. } = &self.state {
+                    games.get(&appid).cloned()
+                } else {
+                    None
+                };
+
+                let Some(game_entry) = game_entry else {
+                    return Task::none();
+                };
+
                 return Task::perform(
                     async move {
                         let client = reqwest::Client::new();
-                        let games = get_games().map_err(|e| e.to_string())?;
-
-                        let game = games
-                            .into_iter()
-                            .find(|g| g.appid == appid_clone)
-                            .ok_or_else(|| format!("Game '{}' not found", appid_clone))?;
-
-                        let items = get_workshop_entries(&game).map_err(|e| e.to_string())?;
+                        // Only re-read the workshop directory, not the ACF/VDF files
+                        let items = get_workshop_entries(&game_entry).map_err(|e| e.to_string())?;
                         let items = enrich_workshop_items_for_game(&client, items)
                             .await
                             .map_err(|e| e.to_string())?;
-
-                        Ok::<_, String>(vec![(game, items)])
+                        Ok::<_, String>(vec![(game_entry, items)])
                     },
                     move |result| match result {
                         Ok(data) => cosmic::Action::App(Message::RefreshComplete { appid, data }),

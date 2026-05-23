@@ -86,7 +86,61 @@ fn get_cookie_db_path() -> Result<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
-fn decrypt_dpapi(data: &[u8]) -> Result<String> {
+fn get_aes_key() -> Result<Vec<u8>> {
+    use std::io::Write;
+    let log_path = std::env::temp_dir().join("swu_cookies_debug.log");
+    let mut log = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
+    use base64::Engine;
+
+    macro_rules! dlog {
+        ($($arg:tt)*) => {
+            if let Some(ref mut f) = log { let _ = writeln!(f, $($arg)*); }
+        }
+    }
+
+    // Steam's Local State is next to htmlcache
+    let base = dirs::data_local_dir().context("No local data dir")?;
+    let local_state_path = base.join("Steam\\htmlcache\\Local State");
+    dlog!("Local State path: {}", local_state_path.display());
+
+    let contents = std::fs::read_to_string(&local_state_path)
+        .context("Could not read Local State file")?;
+
+    // Parse JSON to get os_crypt.encrypted_key
+    let json: serde_json::Value = serde_json::from_str(&contents)
+        .context("Could not parse Local State JSON")?;
+
+    let encrypted_key_b64 = json["os_crypt"]["encrypted_key"]
+        .as_str()
+        .context("No os_crypt.encrypted_key in Local State")?;
+
+    dlog!("encrypted_key_b64 len: {}", encrypted_key_b64.len());
+
+    let encrypted_key = base64::engine::general_purpose::STANDARD
+        .decode(encrypted_key_b64)
+        .context("Could not base64-decode encrypted_key")?;
+
+    dlog!("encrypted_key bytes len: {}", encrypted_key.len());
+
+    // First 5 bytes are "DPAPI" prefix, skip them
+    if encrypted_key.len() < 5 || &encrypted_key[..5] != b"DPAPI" {
+        anyhow::bail!("encrypted_key does not start with DPAPI prefix");
+    }
+
+    let dpapi_blob = &encrypted_key[5..];
+    dlog!("dpapi_blob len: {}", dpapi_blob.len());
+
+    // Decrypt with DPAPI to get the raw AES key
+    let aes_key = decrypt_dpapi(dpapi_blob)
+        .context("DPAPI decryption of AES key failed")?;
+    // aes_key is already Vec<u8>, no .into_bytes() needed
+
+    dlog!("AES key len: {}", aes_key.len()); // will now print 32
+    Ok(aes_key)  // ← not aes_key.into_bytes()
+}
+
+#[cfg(target_os = "windows")]
+fn decrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {  // ← Vec<u8>, not String
     use windows::Win32::Foundation::HLOCAL;
     use windows::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
 
@@ -99,11 +153,7 @@ fn decrypt_dpapi(data: &[u8]) -> Result<String> {
     unsafe {
         CryptUnprotectData(
             &mut input,
-            None,
-            None,
-            None,
-            None,
-            0,
+            None, None, None, None, 0,
             &mut output,
         ).ok().context("CryptUnprotectData failed")?;
 
@@ -114,7 +164,7 @@ fn decrypt_dpapi(data: &[u8]) -> Result<String> {
 
         windows::Win32::Foundation::LocalFree(Some(HLOCAL(output.pbData as _)));
 
-        Ok(String::from_utf8_lossy(&bytes).to_string())
+        Ok(bytes)  // ← return raw bytes directly
     }
 }
 
@@ -194,6 +244,40 @@ fn decrypt_cookie_linux(encrypted: &[u8]) -> Result<String> {
     anyhow::bail!("All decryption attempts failed")
 }
 
+#[cfg(target_os = "windows")]
+fn decrypt_cookie_windows(encrypted: &[u8], aes_key: &[u8]) -> Result<String> {
+    if encrypted.len() < 3 {
+        anyhow::bail!("Too short");
+    }
+
+    let prefix = &encrypted[..3];
+
+    if prefix != b"v10" && prefix != b"v11" {
+        let bytes = decrypt_dpapi(encrypted).context("Legacy DPAPI decrypt failed")?;
+        return Ok(String::from_utf8_lossy(&bytes).to_string());
+    }
+
+    let rest = &encrypted[3..];
+    if rest.len() < 12 + 16 {
+        anyhow::bail!("Encrypted value too short for AES-GCM");
+    }
+
+    use aes_gcm::{Aes256Gcm, KeyInit, aead::Aead};
+
+    let key: &aes_gcm::aead::Key<Aes256Gcm> = aes_key.try_into()
+        .map_err(|_| anyhow::anyhow!("AES key must be 32 bytes, got {}", aes_key.len()))?;
+    let cipher = Aes256Gcm::new(key);
+
+    let nonce: &aes_gcm::Nonce<_> = (&rest[..12]).try_into()
+        .map_err(|_| anyhow::anyhow!("Nonce must be 12 bytes"))?;
+    let ciphertext_and_tag = &rest[12..];
+
+    let plaintext = cipher.decrypt(nonce, ciphertext_and_tag)
+        .map_err(|e| anyhow::anyhow!("AES-GCM decryption failed: {:?}", e))?;
+
+    Ok(String::from_utf8_lossy(&plaintext).to_string())
+}
+
 fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
     if encrypted.is_empty() {
         anyhow::bail!("Empty encrypted value");
@@ -202,9 +286,12 @@ fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
     #[cfg(target_os = "windows")]
     {
         if encrypted.len() >= 3 && (encrypted.starts_with(b"v10") || encrypted.starts_with(b"v11")) {
-            return decrypt_dpapi(&encrypted[3..]);
+            // This path shouldn't normally be hit — decrypt_cookie_windows handles v10/v11
+            // Legacy DPAPI cookies have no prefix
         }
-        return Ok(String::from_utf8_lossy(encrypted).to_string());
+        // Legacy DPAPI-encrypted cookies (no v10/v11 prefix)
+        let bytes = decrypt_dpapi(encrypted).context("Legacy DPAPI decrypt failed")?;
+        return Ok(String::from_utf8_lossy(&bytes).to_string());
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -213,27 +300,190 @@ fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
     }
 }
 
-fn copy_db(src_path: &PathBuf, dst_path: &PathBuf) -> Result<()> {
-    let src = Connection::open_with_flags(
-        src_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    ).context("Could not open Steam cookie database")?;
 
-    let mut dst = Connection::open(dst_path)
-        .context("Could not create temp database")?;
+#[cfg(target_os = "windows")]
+fn read_locked_file_windows(src_path: &PathBuf) -> Result<Vec<u8>> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, ReadFile, FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,  // ← remove GENERIC_READ here
+    };
 
-    let backup = rusqlite::backup::Backup::new(&src, &mut dst)
-        .context("Could not initialize backup")?;
 
-    backup.run_to_completion(100, std::time::Duration::from_millis(5), None)
-        .context("Could not complete database backup")?;
+    let wide: Vec<u16> = src_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
 
-    Ok(())
+    let handle: HANDLE = unsafe {
+        CreateFileW(
+            PCWSTR(wide.as_ptr()),
+            0x8000_0000u32,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            None,
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+            None,
+        )
+            .context("CreateFileW failed — cannot open locked cookie database")?
+    };
+
+    // Get file size
+    let mut size = 0u64;
+    unsafe {
+        windows::Win32::Storage::FileSystem::GetFileSizeEx(handle, &mut size as *mut u64 as *mut _)
+            .ok()
+            .context("GetFileSizeEx failed")?;
+    }
+
+    let mut buf = vec![0u8; size as usize];
+    let mut bytes_read = 0u32;
+
+    unsafe {
+        ReadFile(
+            handle,
+            Some(buf.as_mut_slice()),
+            Some(&mut bytes_read),
+            None,
+        )
+            .ok()
+            .context("ReadFile failed")?;
+
+        let _ = windows::Win32::Foundation::CloseHandle(handle);
+    }
+
+    buf.truncate(bytes_read as usize);
+    Ok(buf)
 }
+
+#[cfg(target_os = "windows")]
+fn copy_db_windows(src_path: &PathBuf, dst_path: &PathBuf) -> Result<()> {
+    // Attempt 1: direct open (works when Steam is closed)
+    if let Ok(src) = Connection::open_with_flags(
+        src_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+            | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) {
+        if let Ok(mut dst) = Connection::open(dst_path) {
+            if let Ok(backup) = rusqlite::backup::Backup::new(&src, &mut dst) {
+                if backup
+                    .run_to_completion(100, std::time::Duration::from_millis(5), None)
+                    .is_ok()
+                {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    // Attempt 2: immutable URI
+    let forward = src_path
+        .to_str()
+        .context("Invalid path")?
+        .replace('\\', "/");
+    let uri = format!("file:///{}?immutable=1&mode=ro", forward.trim_start_matches('/'));
+
+    if let Ok(src) = Connection::open_with_flags(
+        &uri,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+            | rusqlite::OpenFlags::SQLITE_OPEN_URI
+            | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) {
+        if let Ok(mut dst) = Connection::open(dst_path) {
+            if let Ok(backup) = rusqlite::backup::Backup::new(&src, &mut dst) {
+                if backup
+                    .run_to_completion(100, std::time::Duration::from_millis(5), None)
+                    .is_ok()
+                {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    // Attempt 3: read the locked file via CreateFileW with full share flags,
+    // write bytes to temp location, then also grab WAL/SHM the same way.
+    let db_bytes = read_locked_file_windows(src_path)
+        .context("Could not read locked cookie database")?;
+    std::fs::write(dst_path, &db_bytes)
+        .context("Could not write cookie database to temp path")?;
+
+    // Pull WAL and SHM files the same way
+    for suffix in &["-wal", "-shm"] {
+        let src_side = {
+            let mut p = src_path.clone();
+            let name = p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Cookies")
+                .to_string();
+            p.set_file_name(format!("{}{}", name, suffix));
+            p
+        };
+        let dst_side = {
+            let mut p = dst_path.clone();
+            let name = p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("swu_cookies_tmp.db")
+                .to_string();
+            p.set_file_name(format!("{}{}", name, suffix));
+            p
+        };
+        if src_side.exists() {
+            if let Ok(bytes) = read_locked_file_windows(&src_side) {
+                let _ = std::fs::write(&dst_side, bytes);
+            }
+        }
+    }
+
+    // Open the written DB to verify SQLite can read it
+    Connection::open_with_flags(
+        dst_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+        .map(|_| ())
+        .context("Copied database is not readable by SQLite")
+}
+
+fn copy_db(src_path: &PathBuf, dst_path: &PathBuf) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        return copy_db_windows(src_path, dst_path);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let src = Connection::open_with_flags(
+            src_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+                | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        ).context("Could not open Steam cookie database")?;
+
+        let mut dst = Connection::open(dst_path)
+            .context("Could not create temp database")?;
+
+        let backup = rusqlite::backup::Backup::new(&src, &mut dst)
+            .context("Could not initialize backup")?;
+
+        backup.run_to_completion(100, std::time::Duration::from_millis(5), None)
+            .context("Could not complete database backup")?;
+
+        Ok(())
+    }
+}
+
 
 pub fn get_steam_cookies() -> Result<SteamCookies> {
     let log_path = std::env::temp_dir().join("swu_cookies_debug.log");
     let mut log = std::fs::File::create(&log_path).ok();
+
+
+    #[cfg(target_os = "windows")]
+    let aes_key = get_aes_key().context("Could not get AES decryption key")?;
 
     macro_rules! dlog {
         ($($arg:tt)*) => {
@@ -295,16 +545,18 @@ pub fn get_steam_cookies() -> Result<SteamCookies> {
         }
 
         let resolved = if !value.is_empty() {
-            dlog!("  using plaintext");
             value
         } else if !encrypted.is_empty() {
-            dlog!("  attempting decryption...");
-            match decrypt_cookie(&encrypted) {
-                Ok(v) => { dlog!("  decrypted ok len={}", v.len()); v }
+            match {
+                #[cfg(target_os = "windows")]
+                { decrypt_cookie_windows(&encrypted, &aes_key) }
+                #[cfg(not(target_os = "windows"))]
+                { decrypt_cookie(&encrypted) }
+            } {
+                Ok(v) => v,
                 Err(e) => { dlog!("  decryption failed: {}", e); String::new() }
             }
         } else {
-            dlog!("  no value or encrypted_value");
             String::new()
         };
 

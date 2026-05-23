@@ -39,7 +39,14 @@ pub fn newest_file_timestamp(path: &Path) -> Option<u64> {
 
     for entry in std::fs::read_dir(path).ok()? {
         let Ok(entry) = entry else { continue };
-        let ts = modified_secs(&entry.path());
+        let entry_path = entry.path();
+
+        let ts = if entry_path.is_dir() {
+            newest_file_timestamp(&entry_path)
+        } else {
+            modified_secs(&entry_path)
+        };
+
         newest = match (newest, ts) {
             (None, ts) => ts,
             (Some(a), Some(b)) => Some(a.max(b)),

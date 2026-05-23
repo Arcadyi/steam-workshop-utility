@@ -1804,8 +1804,7 @@ impl AppModel {
                 widget::row::with_capacity(2)
                     .push(
                         widget::text::body(
-                            "Steam is open — subscribe/unsubscribe requires reading a locked file. \
-                     Close Steam temporarily to load cookies?"
+                            "Some functions require reading Steam cookies. Restart Steam to load cookies?"
                         ).width(Length::Fill)
                     )
                     .push(

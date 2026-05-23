@@ -1,6 +1,6 @@
 [package]
 name = "steam-workshop-utility"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2024"
 license = "GPL-3.0"
 description = "A Steam Workshop utility for the COSMIC™ desktop"
@@ -47,6 +47,7 @@ windows-sys = { version = "0.61.2", features = ["Win32_UI_Shell", "Win32_UI_Wind
 windows = { version = "0.62.2", features = [
     "Win32_Security_Cryptography",
     "Win32_System_Memory",
+    "Win32_Storage_FileSystem",
 ] }
 
 # COSMIC UI framework

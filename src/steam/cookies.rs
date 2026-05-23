@@ -11,31 +11,78 @@ use {
     sha1::Sha1,
 };
 
-#[cfg(target_os = "windows")]
-use windows::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
-
 #[derive(Debug, Clone)]
 pub struct SteamCookies {
     pub session_id: String,
     pub login_secure: String,
 }
 
+#[cfg(target_os = "windows")]
 fn get_cookie_db_path() -> Result<PathBuf> {
-    #[cfg(target_os = "linux")]
-    let path = dirs::home_dir()
-        .context("Could not determine home directory")?
-        .join(".local/share/Steam/config/htmlcache/Default/Cookies");
+    use std::io::Write;
+    let log_path = std::env::temp_dir().join("swu_cookies_debug.log");
+    let mut log = std::fs::OpenOptions::new()
+        .create(true).append(true).open(&log_path).ok();
 
-    #[cfg(target_os = "windows")]
-    let path = dirs::data_local_dir()
-        .context("Could not determine local data directory")?
-        .join("Steam/htmlcache/Default/Cookies");
-
-    if !path.exists() {
-        anyhow::bail!("Steam cookie database not found at {}", path.display());
+    macro_rules! dlog {
+        ($($arg:tt)*) => {
+            if let Some(ref mut f) = log {
+                let _ = writeln!(f, $($arg)*);
+            }
+        }
     }
 
-    Ok(path)
+    let base = dirs::data_local_dir()
+        .context("Could not determine local data directory")?;
+
+    let candidates = [
+        base.join("Steam\\htmlcache\\Default\\Network\\Cookies"),
+        base.join("Steam\\htmlcache\\Default\\Cookies"),
+        base.join("Steam\\htmlcache\\Cookies"),
+        base.join("Steam\\config\\htmlcache\\Default\\Network\\Cookies"),
+        base.join("Steam\\config\\htmlcache\\Default\\Cookies"),
+        base.join("Steam\\config\\htmlcache\\Cookies"),
+        PathBuf::from("C:\\Program Files (x86)\\Steam\\htmlcache\\Default\\Network\\Cookies"),
+        PathBuf::from("C:\\Program Files (x86)\\Steam\\htmlcache\\Default\\Cookies"),
+        PathBuf::from("C:\\Program Files (x86)\\Steam\\htmlcache\\Cookies"),
+        PathBuf::from("C:\\Program Files\\Steam\\htmlcache\\Default\\Network\\Cookies"),
+        PathBuf::from("C:\\Program Files\\Steam\\htmlcache\\Default\\Cookies"),
+    ];
+
+    for path in &candidates {
+        dlog!("Trying: {}", path.display());
+        if path.exists() {
+            dlog!("Found at: {}", path.display());
+            return Ok(path.clone());
+        }
+    }
+
+    anyhow::bail!("Steam cookie database not found — checked {} locations", candidates.len())
+}
+
+#[cfg(target_os = "linux")]
+fn get_cookie_db_path() -> Result<PathBuf> {
+    let home = dirs::home_dir().context("Could not determine home directory")?;
+    let base = home.join(".local/share/Steam/config/htmlcache/Default");
+
+    let candidates = [
+        base.join("Network/Cookies"),
+        base.join("Cookies"),
+    ];
+
+    for path in &candidates {
+        if path.exists() {
+            return Ok(path.clone());
+        }
+    }
+
+    anyhow::bail!(
+        "Steam cookie database not found — checked {}",
+        candidates.iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
 
 #[cfg(target_os = "windows")]
@@ -112,7 +159,6 @@ fn decrypt_cookie_linux(encrypted: &[u8]) -> Result<String> {
     let iv = [b' '; 16];
     let password = get_keyring_password().unwrap_or_else(|_| b"peanuts".to_vec());
 
-    // Try AES-128 first (v10), then AES-256 (v11)
     let candidates_128: &[&[u8]] = &[password.as_slice(), b"peanuts", b""];
     for pw in candidates_128 {
         let mut key = [0u8; 16];
@@ -149,15 +195,13 @@ fn decrypt_cookie_linux(encrypted: &[u8]) -> Result<String> {
 }
 
 fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
-    if encrypted.len() < 3 {
-        anyhow::bail!("Encrypted value too short");
+    if encrypted.is_empty() {
+        anyhow::bail!("Empty encrypted value");
     }
 
     #[cfg(target_os = "windows")]
     {
-        let prefix = &encrypted[..3];
-        // On Windows, v10 = DPAPI blob; no prefix = plaintext
-        if prefix == b"v10" || prefix == b"v11" {
+        if encrypted.len() >= 3 && (encrypted.starts_with(b"v10") || encrypted.starts_with(b"v11")) {
             return decrypt_dpapi(&encrypted[3..]);
         }
         return Ok(String::from_utf8_lossy(encrypted).to_string());
@@ -169,20 +213,59 @@ fn decrypt_cookie(encrypted: &[u8]) -> Result<String> {
     }
 }
 
+fn copy_db(src_path: &PathBuf, dst_path: &PathBuf) -> Result<()> {
+    let src = Connection::open_with_flags(
+        src_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ).context("Could not open Steam cookie database")?;
+
+    let mut dst = Connection::open(dst_path)
+        .context("Could not create temp database")?;
+
+    let backup = rusqlite::backup::Backup::new(&src, &mut dst)
+        .context("Could not initialize backup")?;
+
+    backup.run_to_completion(100, std::time::Duration::from_millis(5), None)
+        .context("Could not complete database backup")?;
+
+    Ok(())
+}
+
 pub fn get_steam_cookies() -> Result<SteamCookies> {
-    let db_path = get_cookie_db_path().context("Failed to get cookie DB path")?;
-    eprintln!("Cookie DB path: {}", db_path.display());
+    let log_path = std::env::temp_dir().join("swu_cookies_debug.log");
+    let mut log = std::fs::File::create(&log_path).ok();
+
+    macro_rules! dlog {
+        ($($arg:tt)*) => {
+            if let Some(ref mut f) = log {
+                use std::io::Write;
+                let _ = writeln!(f, $($arg)*);
+            }
+        }
+    }
+
+    dlog!("Starting cookie extraction");
+
+    let db_path = match get_cookie_db_path() {
+        Ok(p) => { dlog!("DB path: {}", p.display()); p }
+        Err(e) => { dlog!("Failed to get DB path: {}", e); return Err(e); }
+    };
 
     let tmp_path = std::env::temp_dir().join("swu_cookies_tmp.db");
-    eprintln!("Temp path: {}", tmp_path.display());
+    dlog!("Temp path: {}", tmp_path.display());
 
-    std::fs::copy(&db_path, &tmp_path)
-        .context("Could not copy Steam cookie database")?;
+    match copy_db(&db_path, &tmp_path) {
+        Ok(_) => dlog!("DB copied ok"),
+        Err(e) => { dlog!("Copy failed: {}", e); return Err(e); }
+    }
 
-    let conn = Connection::open_with_flags(
+    let conn = match Connection::open_with_flags(
         &tmp_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )?;
+    ) {
+        Ok(c) => { dlog!("DB opened ok"); c }
+        Err(e) => { dlog!("DB open failed: {}", e); return Err(e.into()); }
+    };
 
     let mut session_id = None;
     let mut login_secure = None;
@@ -201,31 +284,27 @@ pub fn get_steam_cookies() -> Result<SteamCookies> {
         ))
     })?;
 
+    let mut row_count = 0;
     for row in rows {
+        row_count += 1;
         let (name, value, encrypted) = row?;
-        eprintln!("Row: name={} value_len={} encrypted_len={}", name, value.len(), encrypted.len());
+        dlog!("Row {}: name={} value_len={} encrypted_len={}", row_count, name, value.len(), encrypted.len());
 
         if !encrypted.is_empty() {
-            eprintln!("  encrypted prefix: {:?}", &encrypted[..encrypted.len().min(4)]);
+            dlog!("  prefix bytes: {:?}", &encrypted[..encrypted.len().min(4)]);
         }
 
         let resolved = if !value.is_empty() {
-            eprintln!("  using plaintext value");
+            dlog!("  using plaintext");
             value
         } else if !encrypted.is_empty() {
-            eprintln!("  attempting decryption...");
+            dlog!("  attempting decryption...");
             match decrypt_cookie(&encrypted) {
-                Ok(v) => {
-                    eprintln!("  decrypted ok, len={}", v.len());
-                    v
-                }
-                Err(e) => {
-                    eprintln!("  decryption error: {}", e);
-                    String::new()
-                }
+                Ok(v) => { dlog!("  decrypted ok len={}", v.len()); v }
+                Err(e) => { dlog!("  decryption failed: {}", e); String::new() }
             }
         } else {
-            eprintln!("  no value and no encrypted_value");
+            dlog!("  no value or encrypted_value");
             String::new()
         };
 
@@ -236,10 +315,11 @@ pub fn get_steam_cookies() -> Result<SteamCookies> {
         }
     }
 
-    let _ = std::fs::remove_file(&tmp_path);
+    dlog!("Total rows: {}", row_count);
+    dlog!("session_id present: {}", session_id.is_some());
+    dlog!("login_secure present: {}", login_secure.is_some());
 
-    eprintln!("session_id present: {}", session_id.is_some());
-    eprintln!("login_secure present: {}", login_secure.is_some());
+    let _ = std::fs::remove_file(&tmp_path);
 
     Ok(SteamCookies {
         session_id: session_id.context("sessionid cookie not found — are you logged into Steam?")?,

@@ -33,7 +33,7 @@ open = "5.3.2"
 chrono = "0.4.44"
 serde_json = "1.0.149"
 base64 = "0.22.1"
-rusqlite = { version = "0.39.0", features = ["bundled"] }
+rusqlite = { version = "0.39.0", features = ["bundled", "backup"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 aes = "0.9.0"

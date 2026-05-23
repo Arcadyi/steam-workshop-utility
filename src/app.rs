@@ -1818,7 +1818,7 @@ impl AppModel {
 
             return widget::container(
                 widget::container(inner)
-                    .padding([spacing.space_s, spacing.space_m])
+                    .padding([spacing.space_s, spacing.space_s])
                     .width(Length::Fill)
                     .style(|theme| container::Style {
                         background: Some(Background::Color(Color::from_rgba(0.7, 0.5, 0.0, 0.25))),
@@ -1830,7 +1830,7 @@ impl AppModel {
                         ..Default::default()
                     }),
             )
-                .padding([0, spacing.space_m, spacing.space_s, spacing.space_m])
+                .padding([0, spacing.space_xs, spacing.space_xs, spacing.space_xs])
                 .width(Length::Fill)
                 .into();
         }

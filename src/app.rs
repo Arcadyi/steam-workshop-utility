@@ -1821,6 +1821,11 @@ impl AppModel {
                 .width(Length::Fill)
                 .style(|theme| container::Style {
                     background: Some(Background::Color(Color::from_rgba(0.7, 0.5, 0.0, 0.25))),
+                    border: Border {
+                        radius: 8.0.into(),
+                        width: 0.0,
+                        color: Color::TRANSPARENT,
+                    },
                     ..Default::default()
                 })
                 .into();
@@ -1890,7 +1895,7 @@ impl AppModel {
         };
 
         widget::container(inner)
-            .padding([spacing.space_s, spacing.space_m])
+            .padding([spacing.space_s, spacing.space_m, spacing.space_m, spacing.space_m])
             .width(Length::Fill)
             .into()
     }

@@ -815,6 +815,24 @@ impl cosmic::Application for AppModel {
             Message::DirectActionComplete { item_id, result } => {
                 match result {
                     Ok(()) => {
+                        // Find the item's path before removing it from state
+                        let item_path = if let AppState::Loaded { items, .. } = &self.state {
+                            items.values()
+                                .flat_map(|v| v.iter())
+                                .find(|i| i.item_id == item_id)
+                                .map(|i| i.path.clone())
+                        } else {
+                            None
+                        };
+
+                        // Delete the orphaned folder so it doesn't reappear on next scan
+                        if let Some(path) = item_path {
+                            if let Err(e) = std::fs::remove_dir_all(&path) {
+                                eprintln!("Failed to delete workshop folder {}: {}", path.display(), e);
+                            }
+                        }
+
+                        // Remove from in-memory state
                         if let AppState::Loaded { items, .. } = &mut self.state {
                             for game_items in items.values_mut() {
                                 game_items.retain(|i| i.item_id != item_id);

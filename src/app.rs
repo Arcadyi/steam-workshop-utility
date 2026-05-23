@@ -63,6 +63,9 @@ pub struct AppModel {
     // Cookies
     steam_cookies: Option<crate::steam::cookies::SteamCookies>,
     steam_cookies_error: Option<String>,
+
+    steam_restart_needed: bool,
+    steam_restart_in_progress: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -149,6 +152,10 @@ pub enum Message {
     DirectActionComplete { item_id: String, result: Result<(), String> },
     DirectSubscribeAll { appid: String, item_ids: Vec<String> },
     DirectSyncCollection { appid: String, collection_item_ids: Vec<String> },
+
+    CheckSteamAndRestart,
+    SteamKilled,
+    SteamRestartDone(Result<crate::steam::cookies::SteamCookies, String>),
 }
 
 impl cosmic::Application for AppModel {
@@ -208,6 +215,8 @@ impl cosmic::Application for AppModel {
             import_item_names: HashMap::new(),
             steam_cookies: None,
             steam_cookies_error: None,
+            steam_restart_needed: false,
+            steam_restart_in_progress: false,
         };
 
         let scan_task = Task::perform(
@@ -765,11 +774,17 @@ impl cosmic::Application for AppModel {
                     Ok(cookies) => {
                         self.steam_cookies = Some(cookies);
                         self.steam_cookies_error = None;
+                        self.steam_restart_needed = false;
                     }
                     Err(e) => {
-                        println!("✗ Failed to load Steam cookies: {}", e);
                         self.steam_cookies = None;
                         self.steam_cookies_error = Some(e);
+                        // On Windows, a failed cookie read almost always means Steam is
+                        // holding a lock on the DB with stale data — prompt to restart
+                        #[cfg(target_os = "windows")]
+                        {
+                            self.steam_restart_needed = crate::utils::general::is_steam_running();
+                        }
                     }
                 }
             }
@@ -911,6 +926,55 @@ impl cosmic::Application for AppModel {
                     },
                     |appid| cosmic::Action::App(Message::StartPollingGame(appid)),
                 );
+            }
+
+            Message::CheckSteamAndRestart => {
+                #[cfg(target_os = "windows")]
+                {
+                    self.steam_restart_in_progress = true;
+                    return Task::perform(
+                        async {
+                            crate::utils::general::kill_steam()
+                                .map_err(|e| e.to_string())
+                        },
+                        |result| match result {
+                            Ok(()) => cosmic::Action::App(Message::SteamKilled),
+                            Err(e) => cosmic::Action::App(Message::ScanFailed(e)),
+                        },
+                    );
+                }
+                #[cfg(not(target_os = "windows"))]
+                {}
+            }
+
+            Message::SteamKilled => {
+                // Now read cookies while Steam is fully closed
+                return Task::perform(
+                    async {
+                        crate::steam::cookies::get_steam_cookies()
+                            .map_err(|e| e.to_string())
+                    },
+                    |result| cosmic::Action::App(Message::SteamRestartDone(result)),
+                );
+            }
+
+            Message::SteamRestartDone(result) => {
+                self.steam_restart_in_progress = false;
+                self.steam_restart_needed = false;
+                match result {
+                    Ok(cookies) => {
+                        self.steam_cookies = Some(cookies);
+                        self.steam_cookies_error = None;
+                    }
+                    Err(e) => {
+                        self.steam_cookies_error = Some(e);
+                    }
+                }
+                // Re-launch Steam now that we have the cookies
+                #[cfg(target_os = "windows")]
+                {
+                    let _ = crate::utils::general::launch_steam();
+                }
             }
         }
 
@@ -1728,6 +1792,40 @@ impl AppModel {
 
     fn view_status_bar(&self) -> Element<'_, Message> {
         let spacing = cosmic::theme::spacing();
+
+        if self.steam_restart_needed || self.steam_restart_in_progress {
+            let inner: Element<'_, Message> = if self.steam_restart_in_progress {
+                widget::row::with_capacity(1)
+                    .push(widget::text::body(
+                        "Closing Steam and reading cookies... Steam will relaunch automatically."
+                    ).width(Length::Fill))
+                    .into()
+            } else {
+                widget::row::with_capacity(2)
+                    .push(
+                        widget::text::body(
+                            "Steam is open — subscribe/unsubscribe requires reading a locked file. \
+                     Close Steam temporarily to load cookies?"
+                        ).width(Length::Fill)
+                    )
+                    .push(
+                        widget::button::suggested("Restart Steam")
+                            .on_press(Message::CheckSteamAndRestart)
+                    )
+                    .align_y(cosmic::iced::Alignment::Center)
+                    .spacing(spacing.space_s)
+                    .into()
+            };
+
+            return widget::container(inner)
+                .padding([spacing.space_s, spacing.space_m])
+                .width(Length::Fill)
+                .style(|theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(0.7, 0.5, 0.0, 0.25))),
+                    ..Default::default()
+                })
+                .into();
+        }
 
         let inner: Element<'_, Message> = if self.redownload_complete {
             widget::row::with_capacity(2)

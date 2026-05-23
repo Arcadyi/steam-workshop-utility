@@ -77,3 +77,32 @@ pub fn format_timestamp(ts: Option<u64>) -> String {
         }
     }
 }
+
+#[cfg(target_os = "windows")]
+pub fn is_steam_running() -> bool {
+    use std::process::Command;
+    Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq steam.exe", "/NH", "/FO", "CSV"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("steam.exe"))
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "windows")]
+pub fn kill_steam() -> std::io::Result<()> {
+    std::process::Command::new("taskkill")
+        .args(["/IM", "steam.exe", "/F"])
+        .output()?;
+    // Give Steam a moment to fully release file locks
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+pub fn launch_steam() -> std::io::Result<()> {
+    // steam:// URI handler re-launches Steam
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "steam://open/main"])
+        .spawn()?;
+    Ok(())
+}

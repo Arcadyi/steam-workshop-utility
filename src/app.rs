@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::steam::api::{open_uri, try_fetch_image};
+use crate::steam::api::{fetch_workshop_metadata_batch, open_uri, try_fetch_image};
 use crate::steam::library::{
     enrich_workshop_items_for_game, find_acf_path, get_games, get_workshop_entries,
     zero_acf_entries,
@@ -17,6 +17,7 @@ use icon::from_svg_bytes;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use crate::icons::{APP_ICON, ICON_CHECK, ICON_CROSS, ICON_FOLDER, ICON_GAME, ICON_QUESTION, ICON_STEAM};
+use crate::steam::collection::collection::CollectionCode;
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 
@@ -52,6 +53,12 @@ pub struct AppModel {
     thumbnail_cache: HashMap<String, widget::image::Handle>,
     game_banner_cache: HashMap<String, widget::image::Handle>,
     compact_mode: bool,
+
+    generated_code: Option<String>,
+    import_code_input: String,
+    pending_import: Option<CollectionCode>,
+    import_error: bool,
+    import_item_names: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -113,6 +120,23 @@ pub enum Message {
     },
     ToggleCompactMode,
     SelectOutOfDate,
+
+    // Collection
+    GenerateCollectionCode,
+    CollectionCodeGenerated(String),
+    CopyCodeToClipboard(String),
+
+    ToggleImportPanel,
+    ImportCodeChanged(String),
+    ImportCode,
+    ImportResolved(CollectionCode),
+    ClearImport,
+    ImportMetadataLoaded {
+        collection: CollectionCode,
+        names: HashMap<String, String>, // item_id -> name
+    },
+
+    Noop,
 }
 
 impl cosmic::Application for AppModel {
@@ -165,6 +189,11 @@ impl cosmic::Application for AppModel {
             thumbnail_cache: HashMap::new(),
             game_banner_cache: HashMap::new(),
             compact_mode: false,
+            generated_code: None,
+            import_code_input: "".to_string(),
+            pending_import: None,
+            import_error: false,
+            import_item_names: HashMap::new(),
         };
 
         let scan_task = Task::perform(
@@ -203,6 +232,17 @@ impl cosmic::Application for AppModel {
                 |url| Message::LaunchUrl(url.to_string()),
                 Message::ToggleContextPage(ContextPage::About),
             ),
+            ContextPage::CollectionCode => context_drawer::context_drawer(
+                self.view_collection_code_drawer(),
+                Message::ToggleContextPage(ContextPage::CollectionCode),
+            )
+                .title("Share Collection"),
+
+            ContextPage::ImportCode => context_drawer::context_drawer(
+                self.view_import_drawer(),
+                Message::ToggleContextPage(ContextPage::ImportCode),
+            )
+                .title("Import Collection"),
         })
     }
 
@@ -244,6 +284,8 @@ impl cosmic::Application for AppModel {
 
     fn update(&mut self, message: Self::Message) -> Task<cosmic::Action<Self::Message>> {
         match message {
+            Message::Noop => {}
+
             Message::ScanComplete(results) => {
                 let mut items_map = HashMap::new();
                 let mut games_map = HashMap::new();
@@ -463,7 +505,10 @@ impl cosmic::Application for AppModel {
 
             Message::OpenSteam { appid, item_id } => {
                 let url = format!("steam://url/CommunityFilePage/{}", item_id);
-                let _ = open_uri(&url);
+                return Task::perform(
+                    async move { open_uri(&url).await },
+                    |_| cosmic::Action::App(Message::Noop),
+                );
             }
 
             Message::RefreshGame(appid) => {
@@ -591,6 +636,99 @@ impl cosmic::Application for AppModel {
                         }
                     }
                 }
+            }
+
+            Message::GenerateCollectionCode => {
+                if let (Some(appid), AppState::Loaded { items, games, .. }) =
+                    (&self.selected_game, &self.state)
+                {
+                    let selected: Vec<String> = items[appid]
+                        .iter()
+                        .filter(|i| i.selected)
+                        .map(|i| i.item_id.clone())
+                        .collect();
+
+                    let name = games[appid].name.clone().unwrap_or_default();
+                    let code = CollectionCode { appid: appid.clone(), name, items: selected }.encode();
+                    self.generated_code = Some(code);
+
+                    self.context_page = ContextPage::CollectionCode;
+                    self.core.window.show_context = true;
+                }
+            }
+
+            Message::CollectionCodeGenerated(code) => {
+                self.generated_code = Some(code);
+                self.context_page = ContextPage::CollectionCode;
+                return self.update(Message::ToggleContextPage(ContextPage::CollectionCode));
+            }
+
+            Message::CopyCodeToClipboard(code) => {
+                return cosmic::iced::clipboard::write(code);
+            }
+
+            Message::ToggleImportPanel => {
+                self.context_page = ContextPage::ImportCode;
+                return self.update(Message::ToggleContextPage(ContextPage::ImportCode));
+            }
+
+            Message::ImportCodeChanged(code) => {
+                self.import_code_input = code;
+            }
+
+            Message::ImportCode => {
+                if let Some(collection) = CollectionCode::decode(&self.import_code_input) {
+                    self.import_error = false;
+
+                    // Collect all IDs we need names for: collection items + installed items for this game
+                    let collection_ids = collection.items.clone();
+                    let installed_ids: Vec<String> = if let AppState::Loaded { items, .. } = &self.state {
+                        items
+                            .get(&collection.appid)
+                            .map(|gi| gi.iter().map(|i| i.item_id.clone()).collect())
+                            .unwrap_or_default()
+                    } else {
+                        vec![]
+                    };
+
+                    let all_ids: Vec<String> = collection_ids.iter()
+                        .chain(installed_ids.iter())
+                        .cloned()
+                        .collect::<std::collections::HashSet<_>>()
+                        .into_iter()
+                        .collect();
+
+                    return Task::perform(
+                        async move {
+                            let client = reqwest::Client::new();
+                            let metadata = fetch_workshop_metadata_batch(&client, &all_ids)
+                                .await
+                                .unwrap_or_default();
+                            let names = metadata.into_iter()
+                                .filter_map(|(id, meta)| meta.title.map(|t| (id, t)))
+                                .collect();
+                            (collection, names)
+                        },
+                        |(collection, names)| cosmic::Action::App(Message::ImportMetadataLoaded { collection, names }),
+                    );
+                } else {
+                    self.import_error = true;
+                    self.pending_import = None;
+                }
+            }
+
+            Message::ImportMetadataLoaded { collection, names } => {
+                self.import_item_names = names;
+                self.pending_import = Some(collection);
+            }
+
+            Message::ImportResolved(collection) => {
+                self.pending_import = Some(collection);
+            }
+            Message::ClearImport => {
+                self.pending_import = None;
+                self.import_error = false;
+                self.import_code_input = String::new();
             }
         }
 
@@ -1053,9 +1191,18 @@ impl AppModel {
                     .on_input(Message::SearchChanged)
                     .width(Length::Fill),
             )
+            .padding(spacing.space_s)
             .push(
                 widget::button::standard(if self.compact_mode { "Expanded" } else { "Compact" })
                     .on_press(Message::ToggleCompactMode),
+            )
+            .push(
+                widget::button::standard("Share")
+                    .on_press(Message::GenerateCollectionCode),
+            )
+            .push(
+                widget::button::standard("Import")
+                    .on_press(Message::ToggleImportPanel),
             )
             .push(sort_menu)
             .align_y(cosmic::iced::Alignment::Center)
@@ -1280,16 +1427,24 @@ impl AppModel {
             },
         ).spacing(if self.compact_mode { spacing.space_xxxs } else { spacing.space_xs });
 
-        widget::scrollable(
-            widget::column::with_capacity(4)
-                .push(game_banner)
-                .push(widget::divider::horizontal::default())
-                .push(header)
-                .push(widget::divider::horizontal::default())
-                .push(rows)
-                .spacing(spacing.space_m)
-                .padding([0, spacing.space_m, spacing.space_m, spacing.space_m]),
-        )
+        widget::column::with_capacity(2)
+            .push(
+                widget::container(game_banner)
+                    .padding([0, spacing.space_xs])
+            )
+            .push(widget::divider::horizontal::default())
+            .push(header)
+            .push(widget::divider::horizontal::default())
+            .push(
+                widget::scrollable(
+                    widget::column::with_capacity(4)
+                        .push(rows)
+                        .spacing(spacing.space_m)
+                        .padding([spacing.space_xs, spacing.space_m, spacing.space_xs, spacing.space_xs]),
+                )
+                    .height(Length::Fill)
+                    .width(Length::Fill)
+            )
             .height(Length::Fill)
             .width(Length::Fill)
             .into()
@@ -1566,12 +1721,310 @@ impl AppModel {
             },
         )
     }
+
+    fn view_collection_code_drawer(&self) -> Element<'_, Message> {
+        let spacing = cosmic::theme::spacing();
+
+        let Some(code) = &self.generated_code else {
+            return widget::container(
+                widget::text::body("No code generated yet. Select items and press Share.")
+            )
+                .padding(spacing.space_m)
+                .into();
+        };
+
+        let decoded = CollectionCode::decode(code);
+        let item_count = decoded.as_ref().map(|c| c.items.len()).unwrap_or(0);
+        let game_name = decoded.map(|c| c.name).unwrap_or_default(); // owned String, no borrow
+
+        widget::column::with_capacity(5)
+            .push(
+                widget::container(
+                    widget::column::with_capacity(2)
+                        .push(widget::text::title4(game_name))
+                        .push(
+                            widget::text::body(format!("{} workshop item(s)", item_count))
+                                .class(cosmic::style::Text::Default),
+                        )
+                        .spacing(spacing.space_xxxs),
+                )
+                    .padding(spacing.space_m)
+                    .width(Length::Fill)
+                    .style(|theme| container::Style {
+                        background: Some(Background::Color(
+                            theme.cosmic().palette.neutral_2.into(),
+                        )),
+                        border: Border {
+                            radius: 8.0.into(),
+                            width: 0.0,
+                            color: Color::TRANSPARENT,
+                        },
+                        ..Default::default()
+                    }),
+            )
+            .push(widget::divider::horizontal::default())
+            .push(widget::text::body(
+                "Share this code with others so they can subscribe to the same mods.",
+            ))
+            .push(
+                widget::container(
+                    widget::scrollable(
+                        widget::container(
+                            widget::text(code.as_str())
+                                .size(11)
+                                .font(cosmic::font::mono())
+                                .width(Length::Fill),
+                        ).padding([0,0,spacing.space_s,0]),
+                    )
+                        .width(Length::Fill).horizontal(),
+                )
+                    .padding(spacing.space_s)
+                    .width(Length::Fill)
+                    .style(|theme| container::Style {
+                        background: Some(Background::Color(
+                            theme.cosmic().palette.neutral_3.into(),
+                        )),
+                        border: Border {
+                            radius: 6.0.into(),
+                            width: 1.0,
+                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.1),
+                        },
+                        ..Default::default()
+                    }),
+            )
+            .push(
+                widget::button::suggested("Copy to Clipboard")
+                    .on_press(Message::CopyCodeToClipboard(code.clone()))
+                    .width(Length::Fill),
+            )
+            .spacing(spacing.space_m)
+            .padding(spacing.space_m)
+            .width(Length::Fill)
+            .into()
+    }
+
+    fn view_import_drawer(&self) -> Element<'_, Message> {
+        let spacing = cosmic::theme::spacing();
+
+        if let Some(ref collection) = self.pending_import {
+            let item_count = collection.items.len();
+            let game_name = collection.name.clone();
+            let appid = collection.appid.clone();
+
+            let installed_ids: HashSet<String> = if let AppState::Loaded { items, .. } = &self.state {
+                items
+                    .get(&appid)
+                    .map(|gi| gi.iter().map(|i| i.item_id.clone()).collect())
+                    .unwrap_or_default()
+            } else {
+                HashSet::new()
+            };
+
+            let collection_item_ids: HashSet<String> = collection.items.iter().cloned().collect();
+
+            let new_count = collection.items.iter().filter(|id| !installed_ids.contains(*id)).count();
+            let mut extra_ids: Vec<String> = installed_ids
+                .iter()
+                .filter(|id| !collection_item_ids.contains(*id))
+                .cloned()
+                .collect();
+
+            extra_ids.sort();
+            let extra_count = extra_ids.len();
+
+            let mut sorted_collection_items = collection.items.clone();
+            sorted_collection_items.sort_by(|a, b| {
+                let name_a = self.import_item_names.get(a).map(|s| s.as_str()).unwrap_or(a.as_str());
+                let name_b = self.import_item_names.get(b).map(|s| s.as_str()).unwrap_or(b.as_str());
+                name_a.cmp(name_b)
+            });
+
+            extra_ids.sort_by(|a, b| {
+                let name_a = self.import_item_names.get(a).map(|s| s.as_str()).unwrap_or(a.as_str());
+                let name_b = self.import_item_names.get(b).map(|s| s.as_str()).unwrap_or(b.as_str());
+                name_a.cmp(name_b)
+            });
+
+            // Helper closure to build a clickable item row
+            let make_item_row = |item_id: &String, is_installed: bool, appid: &String| {
+                let name = self.import_item_names
+                    .get(item_id)
+                    .cloned()
+                    .unwrap_or_else(|| item_id.clone());
+
+                let status_badge = widget::container(
+                    widget::text(if is_installed { "Installed" } else { "New" }).size(10),
+                )
+                    .padding([2, 6])
+                    .style(move |_theme| container::Style {
+                        background: Some(Background::Color(if is_installed {
+                            Color::from_rgba(0.2, 0.6, 0.2, 0.4)
+                        } else {
+                            Color::from_rgba(0.2, 0.4, 0.8, 0.4)
+                        })),
+                        border: Border {
+                            radius: 4.0.into(),
+                            width: 0.0,
+                            color: Color::TRANSPARENT,
+                        },
+                        ..Default::default()
+                    });
+
+                widget::button::custom(
+                    widget::row::with_capacity(3)
+                        .push(widget::text(name).size(13).width(Length::Fill))
+                        .push(status_badge)
+                        .push(widget::icon(from_svg_bytes(ICON_STEAM)).size(14))
+                        .align_y(cosmic::iced::Alignment::Center)
+                        .spacing(spacing.space_xs)
+                        .padding([spacing.space_xs, spacing.space_s]),
+                )
+                    .on_press(Message::OpenSteam {
+                        appid: appid.clone(),
+                        item_id: item_id.clone(),
+                    })
+                    .width(Length::Fill)
+                    .class(cosmic::style::Button::MenuItem)
+            };
+
+            // Collection items list
+            let collection_rows = sorted_collection_items.iter().fold(
+                widget::column::with_capacity(sorted_collection_items.len()).spacing(spacing.space_xxxs),
+                |col, item_id| {
+                    let is_installed = installed_ids.contains(item_id);
+                    col.push(make_item_row(item_id, is_installed, &appid))
+                },
+            );
+
+            // Extra items list (installed but not in collection)
+            let extra_rows = extra_ids.iter().fold(
+                widget::column::with_capacity(extra_ids.len()).spacing(spacing.space_xxxs),
+                |col, item_id| {
+                    col.push(make_item_row(item_id, true, &appid))
+                },
+            );
+
+            let extra_section: Element<Message> = if extra_count > 0 {
+                widget::column::with_capacity(2)
+                    .push(
+                        widget::text::body(format!("Not in collection ({})", extra_count))
+                            .class(cosmic::style::Text::Default),
+                    )
+                    .push(extra_rows)
+                    .spacing(spacing.space_xs)
+                    .into()
+            } else {
+                widget::Space::new().height(0).into()
+            };
+
+            return widget::column::with_capacity(5)
+                .push(
+                    widget::container(
+                        widget::column::with_capacity(3)
+                            .push(widget::text::title4(game_name))
+                            .push(
+                                widget::text::body(format!("{} item(s) in collection", item_count))
+                                    .class(cosmic::style::Text::Default),
+                            )
+                            .push(
+                                widget::text(format!("{} new  •  {} not in collection", new_count, extra_count))
+                                    .size(11)
+                                    .class(cosmic::style::Text::Default),
+                            )
+                            .spacing(spacing.space_xxxs),
+                    )
+                        .padding(spacing.space_m)
+                        .width(Length::Fill)
+                        .style(|theme| container::Style {
+                            background: Some(Background::Color(
+                                theme.cosmic().palette.neutral_2.into(),
+                            )),
+                            border: Border {
+                                radius: 8.0.into(),
+                                width: 0.0,
+                                color: Color::TRANSPARENT,
+                            },
+                            ..Default::default()
+                        }),
+                )
+                .push(
+                    widget::container(
+                        widget::text("Steam does not expose public APIs for a lot of functions, so you'll have to click on each item to subscribe/unsubscribe manually.")
+                            .class(cosmic::style::Text::Default)
+                            .size(12),
+                    )
+                )
+                .push(
+                    widget::scrollable(
+                        widget::column::with_capacity(4)
+                            .push(
+                                widget::text::body(format!("In collection ({})", item_count))
+                                    .class(cosmic::style::Text::Default),
+                            )
+                            .push(collection_rows)
+                            .push(widget::Space::new().height(spacing.space_s))
+                            .push(extra_section)
+                            .spacing(spacing.space_xs)
+                            .padding([spacing.space_xs, 0]),
+                    )
+                        .height(Length::FillPortion(3)),
+                )
+                .push(widget::divider::horizontal::default())
+                .push(
+                    widget::button::standard("← Back")
+                        .on_press(Message::ClearImport)
+                        .width(Length::Fill)
+                )
+                .spacing(spacing.space_m)
+                .padding(spacing.space_m)
+                .width(Length::Fill)
+                .into();
+        }
+
+        // Default: paste input step
+        let error_row: Element<Message> = if self.import_error {
+            widget::container(
+                widget::text::body("Invalid code. Make sure you copied the full SWUC_ code.")
+                    .class(cosmic::style::Text::Color(Color::from_rgb(0.9, 0.3, 0.2))),
+            )
+                .padding([spacing.space_xs, 0])
+                .into()
+        } else {
+            widget::Space::new().height(0).into()
+        };
+
+        widget::column::with_capacity(4)
+            .push(widget::text::body(
+                "Paste a collection code shared by someone else to subscribe to their mod list.",
+            ))
+            .push(
+                widget::text_input("Paste SWUC_ code here...", &self.import_code_input)
+                    .on_input(Message::ImportCodeChanged)
+                    .width(Length::Fill),
+            )
+            .push(error_row)
+            .push(
+                widget::button::suggested("Import")
+                    .on_press_maybe(if self.import_code_input.trim().is_empty() {
+                        None
+                    } else {
+                        Some(Message::ImportCode)
+                    })
+                    .width(Length::Fill),
+            )
+            .spacing(spacing.space_m)
+            .padding(spacing.space_m)
+            .width(Length::Fill)
+            .into()
+    }
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum ContextPage {
     #[default]
     About,
+    CollectionCode,
+    ImportCode,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

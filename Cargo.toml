@@ -1,6 +1,6 @@
 [package]
 name = "steam-workshop-utility"
-version = "0.5.5"
+version = "0.6.0"
 edition = "2024"
 license = "GPL-3.0"
 description = "A Steam Workshop utility for the COSMIC™ desktop"
@@ -32,6 +32,7 @@ reqwest = { version = "0.13", features = ["json", "form"] }
 open = "5.3.2"
 chrono = "0.4.44"
 serde_json = "1.0.149"
+base64 = "0.22.1"
 
 
 [target.'cfg(windows)'.dependencies]

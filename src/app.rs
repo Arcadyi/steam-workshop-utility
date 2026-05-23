@@ -16,7 +16,7 @@ use cosmic::widget::{self, about::About, container, icon, menu};
 use icon::from_svg_bytes;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use crate::icons::{APP_ICON, ICON_CHECK, ICON_CROSS, ICON_FOLDER, ICON_GAME, ICON_QUESTION, ICON_STEAM};
+use crate::icons::{APP_ICON, ICON_CHECK, ICON_CROSS, ICON_FOLDER, ICON_GAME, ICON_IMPORT, ICON_QUESTION, ICON_REMOVE, ICON_SHARE, ICON_STEAM};
 use crate::steam::collection::collection::CollectionCode;
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -59,6 +59,10 @@ pub struct AppModel {
     pending_import: Option<CollectionCode>,
     import_error: bool,
     import_item_names: HashMap<String, String>,
+
+    // Cookies
+    steam_cookies: Option<crate::steam::cookies::SteamCookies>,
+    steam_cookies_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -134,7 +138,17 @@ pub enum Message {
         names: HashMap<String, String>, // item_id -> name
     },
 
+    StartPollingGame(String),
+
     Noop,
+
+    LoadSteamCookies,
+    SteamCookiesLoaded(Result<crate::steam::cookies::SteamCookies, String>),
+    DirectSubscribe { appid: String, item_id: String },
+    DirectUnsubscribe { appid: String, item_id: String },
+    DirectActionComplete { item_id: String, result: Result<(), String> },
+    DirectSubscribeAll { appid: String, item_ids: Vec<String> },
+    DirectSyncCollection { appid: String, collection_item_ids: Vec<String> },
 }
 
 impl cosmic::Application for AppModel {
@@ -192,6 +206,8 @@ impl cosmic::Application for AppModel {
             pending_import: None,
             import_error: false,
             import_item_names: HashMap::new(),
+            steam_cookies: None,
+            steam_cookies_error: None,
         };
 
         let scan_task = Task::perform(
@@ -216,7 +232,15 @@ impl cosmic::Application for AppModel {
             },
         );
 
-        (app, scan_task)
+        let cookie_task = Task::perform(
+            async {
+                crate::steam::cookies::get_steam_cookies()
+                    .map_err(|e| e.to_string())
+            },
+            |result| cosmic::Action::App(Message::SteamCookiesLoaded(result)),
+        );
+
+        (app, Task::batch([scan_task, cookie_task]))
     }
 
     fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<'_, Self::Message>> {
@@ -554,8 +578,11 @@ impl cosmic::Application for AppModel {
                                 });
 
                                 if poll.pending_item_ids.is_empty() {
+                                    if poll.initial_item_count > 0 {
+                                        // came from a ForceRedownload, show completion banner
+                                        self.redownload_complete = true;
+                                    }
                                     self.polling = None;
-                                    self.redownload_complete = true;
                                 }
                             }
                         }
@@ -718,6 +745,150 @@ impl cosmic::Application for AppModel {
                 self.pending_import = None;
                 self.import_error = false;
                 self.import_code_input = String::new();
+            }
+
+            Message::LoadSteamCookies => {
+                return Task::perform(
+                    async {
+                        crate::steam::cookies::get_steam_cookies()
+                            .map_err(|e| e.to_string())
+                    },
+                    |result| cosmic::Action::App(Message::SteamCookiesLoaded(result)),
+                );
+            }
+
+            Message::SteamCookiesLoaded(result) => {
+                match result {
+                    Ok(cookies) => {
+                        self.steam_cookies = Some(cookies);
+                        self.steam_cookies_error = None;
+                    }
+                    Err(e) => {
+                        println!("✗ Failed to load Steam cookies: {}", e);
+                        self.steam_cookies = None;
+                        self.steam_cookies_error = Some(e);
+                    }
+                }
+            }
+
+            Message::DirectSubscribe { appid, item_id } => {
+                let Some(cookies) = self.steam_cookies.clone() else {
+                    return Task::none();
+                };
+                let item_id_clone = item_id.clone();
+                return Task::perform(
+                    async move {
+                        let client = reqwest::Client::new();
+                        crate::steam::workshop_auth::subscribe(&client, &appid, &item_id, &cookies)
+                            .await
+                            .map_err(|e| e.to_string())
+                    },
+                    move |result| cosmic::Action::App(Message::DirectActionComplete {
+                        item_id: item_id_clone,
+                        result,
+                    }),
+                );
+            }
+
+            Message::DirectUnsubscribe { appid, item_id } => {
+                let Some(cookies) = self.steam_cookies.clone() else {
+                    return Task::none();
+                };
+                let item_id_clone = item_id.clone();
+                return Task::perform(
+                    async move {
+                        let client = reqwest::Client::new();
+                        crate::steam::workshop_auth::unsubscribe(&client, &appid, &item_id, &cookies)
+                            .await
+                            .map_err(|e| e.to_string())
+                    },
+                    move |result| cosmic::Action::App(Message::DirectActionComplete {
+                        item_id: item_id_clone,
+                        result,
+                    }),
+                );
+            }
+
+            Message::DirectActionComplete { item_id, result } => {
+                match result {
+                    Ok(()) => {
+                        // Refresh the active game so the unsubscribed item disappears
+                        if let Some(appid) = self.selected_game.clone() {
+                            return self.update(Message::RefreshGame(appid));
+                        }
+                    }
+                    Err(e) => eprintln!("Action failed for item {}: {}", item_id, e),
+                }
+            }
+
+            Message::StartPollingGame(appid) => {
+                // Seed pending_item_ids with whatever is currently selected/pending
+                // We don't need to track specific items here, just poll for a while
+                self.polling = Some(PollingState {
+                    appid: appid.clone(),
+                    elapsed_secs: 0,
+                    initial_item_count: 0,
+                    pending_item_ids: HashSet::new(), // no specific items to wait on
+                });
+                return self.update(Message::RefreshGame(appid));
+            }
+
+            Message::DirectSubscribeAll { appid, item_ids } => {
+                let Some(cookies) = self.steam_cookies.clone() else {
+                    return Task::none();
+                };
+                self.core.window.show_context = false;
+                self.pending_import = None;
+                return Task::perform(
+                    async move {
+                        let client = reqwest::Client::new();
+                        for item_id in &item_ids {
+                            if let Err(e) = crate::steam::workshop_auth::subscribe(
+                                &client, &appid, item_id, &cookies
+                            ).await {
+                                eprintln!("Failed to subscribe to {}: {}", item_id, e);
+                            }
+                        }
+                        appid
+                    },
+                    |appid| cosmic::Action::App(Message::StartPollingGame(appid)),
+                );
+            }
+
+            Message::DirectSyncCollection { appid, collection_item_ids } => {
+                let Some(cookies) = self.steam_cookies.clone() else {
+                    return Task::none();
+                };
+                self.core.window.show_context = false;
+                self.pending_import = None;
+                let to_remove: Vec<String> = if let AppState::Loaded { items, .. } = &self.state {
+                    items.get(&appid)
+                        .map(|game_items| {
+                            let collection_set: std::collections::HashSet<_> =
+                                collection_item_ids.iter().collect();
+                            game_items.iter()
+                                .filter(|i| !collection_set.contains(&i.item_id))
+                                .map(|i| i.item_id.clone())
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                } else {
+                    vec![]
+                };
+                return Task::perform(
+                    async move {
+                        let client = reqwest::Client::new();
+                        for item_id in &to_remove {
+                            if let Err(e) = crate::steam::workshop_auth::unsubscribe(
+                                &client, &appid, item_id, &cookies
+                            ).await {
+                                eprintln!("Failed to unsubscribe from {}: {}", item_id, e);
+                            }
+                        }
+                        appid
+                    },
+                    |appid| cosmic::Action::App(Message::StartPollingGame(appid)),
+                );
             }
         }
 
@@ -1186,12 +1357,21 @@ impl AppModel {
                     .on_press(Message::ToggleCompactMode),
             )
             .push(
-                widget::button::standard("Share")
-                    .on_press(Message::GenerateCollectionCode),
+                widget::tooltip(
+                    widget::button::icon(from_svg_bytes(ICON_SHARE))
+                        .on_press(Message::GenerateCollectionCode),
+                    widget::text::body("Generate and share a code for this collection."),
+                    widget::tooltip::Position::Top,
+                )
+
             )
             .push(
-                widget::button::standard("Import")
+                widget::tooltip(
+                widget::button::icon(from_svg_bytes(ICON_IMPORT))
                     .on_press(Message::ToggleImportPanel),
+                widget::text::body("Use a code to import a collection."),
+                widget::tooltip::Position::Top,
+                )
             )
             .push(sort_menu)
             .align_y(cosmic::iced::Alignment::Center)
@@ -1221,7 +1401,11 @@ impl AppModel {
                     ItemStatus::Unknown   => "Unknown",
                 };
 
-                let action_buttons = widget::row::with_capacity(2)
+                let has_cookies = self.steam_cookies.is_some();
+                let appid_unsub = appid_owned2.clone();
+                let item_id_unsub = item.item_id.clone();
+
+                let action_buttons = widget::row::with_capacity(3)
                     .push(
                         widget::button::icon(from_svg_bytes(ICON_FOLDER))
                             .on_press(Message::OpenFolder(path))
@@ -1233,7 +1417,18 @@ impl AppModel {
                                 item_id: item_id_for_steam,
                             })
                     )
-                    .spacing(spacing.space_xs);
+                    .push(
+                        widget::button::icon(from_svg_bytes(ICON_REMOVE))
+                            .on_press_maybe(if has_cookies {
+                                Some(Message::DirectUnsubscribe {
+                                    appid: appid_unsub,
+                                    item_id: item_id_unsub,
+                                })
+                            } else {
+                                None
+                            })
+                    )
+                    .spacing(spacing.space_xxxs);
 
                 let thumb: Element<Message> = if let Some(handle) = self.thumbnail_cache.get(&item.item_id) {
                     widget::image(handle.clone())
@@ -1799,6 +1994,7 @@ impl AppModel {
             let item_count = collection.items.len();
             let game_name = collection.name.clone();
             let appid = collection.appid.clone();
+            let has_cookies = self.steam_cookies.is_some();
 
             let installed_ids: HashSet<String> = if let AppState::Loaded { items, .. } = &self.state {
                 items
@@ -1811,7 +2007,12 @@ impl AppModel {
 
             let collection_item_ids: HashSet<String> = collection.items.iter().cloned().collect();
 
-            let new_count = collection.items.iter().filter(|id| !installed_ids.contains(*id)).count();
+            let new_ids: Vec<String> = collection.items.iter()
+                .filter(|id| !installed_ids.contains(*id))
+                .cloned()
+                .collect();
+            let new_count = new_ids.len();
+
             let mut extra_ids: Vec<String> = installed_ids
                 .iter()
                 .filter(|id| !collection_item_ids.contains(*id))
@@ -1834,7 +2035,6 @@ impl AppModel {
                 name_a.cmp(name_b)
             });
 
-            // Helper closure to build a clickable item row
             let make_item_row = |item_id: &String, is_installed: bool, appid: &String| {
                 let name = self.import_item_names
                     .get(item_id)
@@ -1876,7 +2076,6 @@ impl AppModel {
                     .class(cosmic::style::Button::MenuItem)
             };
 
-            // Collection items list
             let collection_rows = sorted_collection_items.iter().fold(
                 widget::column::with_capacity(sorted_collection_items.len()).spacing(spacing.space_xxxs),
                 |col, item_id| {
@@ -1885,7 +2084,6 @@ impl AppModel {
                 },
             );
 
-            // Extra items list (installed but not in collection)
             let extra_rows = extra_ids.iter().fold(
                 widget::column::with_capacity(extra_ids.len()).spacing(spacing.space_xxxs),
                 |col, item_id| {
@@ -1906,7 +2104,57 @@ impl AppModel {
                 widget::Space::new().height(0).into()
             };
 
-            return widget::column::with_capacity(5)
+            let bulk_buttons = widget::row::with_capacity(2)
+                .push(
+                    widget::tooltip(
+                        widget::button::suggested("Subscribe to new")
+                            .on_press_maybe(
+                                if has_cookies && !new_ids.is_empty() {
+                                    Some(Message::DirectSubscribeAll {
+                                        appid: appid.clone(),
+                                        item_ids: new_ids,
+                                    })
+                                } else {
+                                    None
+                                }
+                            ),
+                        widget::text::body(if !has_cookies {
+                            "Steam cookies unavailable".to_string()
+                        } else if new_count == 0 {
+                            "No new items to subscribe to".to_string()
+                        } else {
+                            format!("Subscribe to {} item(s) not yet installed", new_count)
+                        }),
+                        widget::tooltip::Position::Top,
+                    )
+                )
+                .push(
+                    widget::tooltip(
+                        widget::button::destructive("Sync (remove extras)")
+                            .on_press_maybe(
+                                if has_cookies && extra_count > 0 {
+                                    Some(Message::DirectSyncCollection {
+                                        appid: appid.clone(),
+                                        collection_item_ids: collection.items.clone(),
+                                    })
+                                } else {
+                                    None
+                                }
+                            ),
+                        widget::text::body(if !has_cookies {
+                            "Steam cookies unavailable".to_string()
+                        } else if extra_count == 0 {
+                            "No extra items to remove".to_string()
+                        } else {
+                            format!("Unsubscribe from {} item(s) not in this collection", extra_count)
+                        }),
+                        widget::tooltip::Position::Top,
+                    )
+                )
+                .spacing(spacing.space_s)
+                .width(Length::Fill);
+
+            return widget::column::with_capacity(6)
                 .push(
                     widget::container(
                         widget::column::with_capacity(3)
@@ -1936,13 +2184,8 @@ impl AppModel {
                             ..Default::default()
                         }),
                 )
-                .push(
-                    widget::container(
-                        widget::text("Steam does not expose public APIs for a lot of functions, so you'll have to click on each item to subscribe/unsubscribe manually.")
-                            .class(cosmic::style::Text::Default)
-                            .size(12),
-                    )
-                )
+                .push(bulk_buttons)
+                .push(widget::divider::horizontal::default())
                 .push(
                     widget::scrollable(
                         widget::column::with_capacity(4)

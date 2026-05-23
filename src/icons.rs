@@ -5,3 +5,6 @@ pub const ICON_GAME: &[u8] = include_bytes!("../resources/icons/game.svg");
 pub const ICON_CHECK: &[u8] = include_bytes!("../resources/icons/check.svg");
 pub const ICON_CROSS: &[u8] = include_bytes!("../resources/icons/cross.svg");
 pub const ICON_QUESTION: &[u8] = include_bytes!("../resources/icons/question_mark.svg");
+pub const ICON_REMOVE: &[u8] = include_bytes!("../resources/icons/remove.svg");
+pub const ICON_SHARE: &[u8] = include_bytes!("../resources/icons/share.svg");
+pub const ICON_IMPORT: &[u8] = include_bytes!("../resources/icons/import.svg");

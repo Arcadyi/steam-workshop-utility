@@ -8,7 +8,7 @@ import { ScrollView } from "std-widgets.slint";
 import { SidebarEntryData } from "data.slint";
 
 export component Sidebar inherits Rectangle {
-    in-out property <bool> toggled : false;
+    in-out property <bool> toggled : true;
     in-out property <[SidebarEntryData]> entries;
 
     HorizontalLayout {
@@ -18,6 +18,7 @@ export component Sidebar inherits Rectangle {
 
         VerticalLayout {
             NavButton {
+                height: 36px;
                 border-radius: self.height / 2;
                 icon: toggled ? Icon.double_arrow_l : Icon.double_arrow_r;
                 icon_size_x: 24px;

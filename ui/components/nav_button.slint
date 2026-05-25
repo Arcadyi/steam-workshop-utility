@@ -4,14 +4,14 @@ export component NavButton inherits Rectangle {
     in property <string> title: "Title";
 
     in property <image> icon;
-    in property <brush> icon_color: Theme.button-secondary;
+    in property <brush> icon_color: touch-click.has-hover ? Theme.text-inverse : Theme.text-primary;
     in property <length> icon_size_x: 24px;
     in property <length> icon_size_y: 24px;
 
     in property <brush> background_color: Theme.surface;
-    in property <brush> text_color: Theme.text-primary;
-    in property <brush> hover_color: Theme.button;
-    in property <brush> click_color: Theme.button-tertiary;
+    in property <brush> text_color: touch-click.has-hover ? Theme.text-inverse : Theme.text-primary;
+    in property <brush> hover_color: Theme.button-secondary;
+    in property <brush> click_color: Theme.button;
 
     callback on_click();
     callback on_hover(bool);
@@ -27,7 +27,7 @@ export component NavButton inherits Rectangle {
         : touch-click.has-hover ? hover_color
         : background_color;
 
-    animate width {
+    animate width, background {
         duration: 300ms;
         easing: ease-out;
     }
@@ -40,6 +40,11 @@ export component NavButton inherits Rectangle {
                 colorize: icon_color;
                 width: icon_size_x;
                 height: icon_size_y;
+
+                animate colorize {
+                    duration: 300ms;
+                    easing: ease-out;
+                }
             }
         }
     }

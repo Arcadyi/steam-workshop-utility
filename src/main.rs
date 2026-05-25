@@ -12,6 +12,11 @@ pub mod utils;
 
 slint::include_modules!();
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    slint::BackendSelector::new()
+        .renderer_name("skia".into())
+        .select()
+        .unwrap();
+
     let ui = AppWindow::new()?;
     // Core Variables
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));

@@ -2,22 +2,24 @@ import "../../resources/fonts/DM_Sans/DMSans-VariableFont_opsz,wght.ttf";
 export global Theme {
 
     // Mode
-    in-out property <bool> dark-mode: true;
+    in-out property <bool> dark-mode: false;
 
     // Backgrounds / Surfaces
-    out property <brush> background: dark-mode ? #121212: #E5E5E5;
+    out property <brush> background: dark-mode ? #121212: #DBDBDB;
     out property <brush> surface: dark-mode ?
-        @linear-gradient(40deg, #141414 0%, #1F1F1F 100%) : #FFFFFF;
+        @linear-gradient(40deg, #141414 0%, #1F1F1F 100%) : #F2F2F2;
     out property <brush> shadow: dark-mode ? #0A0A0A : #292929;
 
     // Buttons
     out property <brush> button: background;
     out property <brush> button-secondary: gradient-vertical;
-    out property <brush> button-tertiary: surface;
+    out property <brush> button-tertiary:
+        @linear-gradient(60deg, #561D25 0%, #CE8147 100%);
 
     // Borders
     out property <brush> border-light: dark-mode ? #858585 : #FFFFFF;
-    out property <brush> border-gray: dark-mode ? #525252 : #D6D6D6;
+    out property <brush> border-selected: dark-mode ? #858585 : #FF7D00;
+    out property <brush> border-gray: dark-mode ? #525252 : #C4C4C4;
     out property <length> border-thin: 1px;
     out property <length> border-normal: 2px;
     out property <length> border-medium: 4px;
@@ -118,8 +120,8 @@ export global Theme {
     out property <length> card-padding: 20px;
 
     // Shadows (Opacity Tokens)
-    out property <length> shadow-soft: dark-mode ? 10px : 2px;
-    out property <length> shadow-medium: dark-mode ? 1px : 3px;
+    out property <length> shadow-soft: dark-mode ? 10px : 10px;
+    out property <length> shadow-medium: dark-mode ? 1px : 5px;
     out property <length> shadow-strong: dark-mode ? 5px : 2px;
 
     // Animation

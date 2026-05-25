@@ -20,13 +20,13 @@ export component NavbarCard inherits Container {
     animate border-radius, width {
         duration: 100ms;
     }
-    background: selected ? Theme.button-tertiary.darker(0.9) : clicked ? Theme.button-tertiary
+    background: selected ? Theme.button-tertiary.brighter(0.5) : clicked ? Theme.button-tertiary
         : touch-click.has-hover ? Theme.button
         : Theme.surface;
     drop-shadow-color: Theme.shadow;
-    drop-shadow-blur: Theme.shadow-soft;
+    drop-shadow-blur: Theme.shadow-medium;
 
-    border-color: selected ? Theme.border-light : Theme.border-gray;
+    border-color: selected ? Theme.border-selected : Theme.border-light;
     border-width: selected && !small ? Theme.border-normal : Theme.border-thin;
 
     HorizontalLayout {
@@ -71,7 +71,7 @@ export component NavbarCard inherits Container {
                     source: Icon.capsule_test;
                 }
                 drop-shadow-color: Theme.shadow;
-                drop-shadow-blur: Theme.shadow-soft;
+                drop-shadow-blur: Theme.shadow-medium;
             }
             Text {
                 vertical-alignment: center;
@@ -82,23 +82,13 @@ export component NavbarCard inherits Container {
                 font-family: Theme.font-family;
                 overflow: elide;
             }
-            HDivider {}
             HorizontalLayout {
+                 padding-right: Theme.spacing-xs;
                 HorizontalLayout {
                     horizontal-stretch: 3;
-                    padding-left: Theme.spacing-xs;
-                    padding-right: Theme.spacing-xs;
+
                     alignment: start;
                     spacing: Theme.spacing-xxs;
-                    VerticalLayout {
-                        alignment: center;
-                        Image {
-                            source: Icon.steamdb;
-                            colorize: Theme.text-primary;
-                            width: 14px;
-                            height: 14px;
-                        }
-                    }
                     Text {
                         vertical-alignment: center;
                         text: "19 Items";
@@ -108,38 +98,35 @@ export component NavbarCard inherits Container {
                         font-family: Theme.font-family;
                     }
                 }
-                VDivider {}
                 HorizontalLayout {
-                    horizontal-stretch: 1;
-                    padding-left: Theme.spacing-xs;
-                    padding-right: Theme.spacing-xs;
-                    alignment: start;
-                    spacing: Theme.spacing-xxxs;
-                    VerticalLayout {
-                        alignment: center;
-                        Image {
-                            source: Icon.check;
-                            colorize: Theme.success;
-                            width: 20px;
-                            height: 20px;
+                    alignment: end;
+                    spacing: Theme.spacing-xs;
+                    HorizontalLayout {
+                        horizontal-stretch: 1;
+                        alignment: start;
+                        spacing: Theme.spacing-xxxxs;
+                        VerticalLayout {
+                            alignment: center;
+                            Image {
+                                source: Icon.check;
+                                colorize: Theme.success;
+                                width: 20px;
+                                height: 20px;
+                            }
+                        }
+                        Text {
+                            vertical-alignment: center;
+                            text: "8";
+                            color: Theme.text-primary;
+                            font-size: Theme.font-small;
+                            font-weight: Theme.weight-medium;
+                            font-family: Theme.font-family;
                         }
                     }
-                    Text {
-                        vertical-alignment: center;
-                        text: "8";
-                        color: Theme.text-primary;
-                        font-size: Theme.font-small;
-                        font-weight: Theme.weight-medium;
-                        font-family: Theme.font-family;
-                    }
-                }
-                VDivider {}
                     HorizontalLayout {
                         horizontal-stretch: 1;
                         alignment: center;
-                        spacing: Theme.spacing-xxxs;
-                        padding-left: Theme.spacing-xs;
-                        padding-right: Theme.spacing-xs;
+                        spacing: Theme.spacing-xxxxs;
                         VerticalLayout {
                             alignment: center;
                             Image {
@@ -158,6 +145,7 @@ export component NavbarCard inherits Container {
                             font-family: Theme.font-family;
                         }
                     }
+                }
             }
 
         }

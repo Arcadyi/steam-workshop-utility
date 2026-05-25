@@ -26,6 +26,11 @@ export component NavbarCard inherits Container {
     drop-shadow-color: Theme.shadow;
     drop-shadow-blur: Theme.shadow-medium;
 
+    animate background, border-color {
+        duration: 150ms;
+        easing: ease-in-out;
+    }
+
     border-color: selected ? Theme.border-selected : Theme.border-light;
     border-width: selected && !small ? Theme.border-normal : Theme.border-thin;
 

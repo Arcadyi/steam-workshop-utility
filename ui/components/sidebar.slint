@@ -53,9 +53,14 @@ export component Sidebar inherits Rectangle {
                     duration: 50ms;
                     easing: ease-out;
                 }
-                ScrollView {
+                scroll := ScrollView {
                     width: parent.width;
                     vertical-scrollbar-policy: as-needed;
+
+
+                    property <bool> at-top: scroll.viewport-y >= 0px;
+                    property <bool> at-bottom: scroll.viewport-height <= scroll.visible-height ||
+                        scroll.viewport-y <= -(scroll.viewport-height - scroll.visible-height);
 
                     animate width {
                         duration: 200ms;
@@ -65,7 +70,7 @@ export component Sidebar inherits Rectangle {
                         padding-left: Theme.spacing-xxs;
                         padding-right: Theme.spacing-xxs;
                         padding-top: Theme.spacing-xxs;
-                        spacing: Theme.spacing-xxs;
+                        spacing: Theme.spacing-xs;
                         alignment: start;
                         vertical-stretch: 0;
                         // TODO: hook this up
@@ -98,7 +103,23 @@ export component Sidebar inherits Rectangle {
                         }
                     }
                 }
+                // Top fade, show when scrolled down
+                Rectangle {
+                    y: 0;
+                    width: parent.width;
+                    opacity: scroll.at-bottom ? 0.0 : 1.0;
+                    background: Theme.gradient-vertical-fade-top;
+                    animate opacity { duration: 200ms; }
+                }
 
+                // Bottom fade, show when there's more content below
+                Rectangle {
+                    y: parent.height - self.height;
+                    width: parent.width;
+                    opacity: scroll.at-top ? 0.0 : 1.0;
+                    background: Theme.gradient-vertical-fade-bottom;
+                    animate opacity { duration: 200ms; }
+                }
             }
         }
     }

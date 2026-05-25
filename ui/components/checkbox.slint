@@ -1,0 +1,68 @@
+import { Container } from "container.slint";
+import { Theme, Icon } from "../theme.slint";
+
+export component Checkbox inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <string> label: "";
+    in property <bool> disabled: false;
+    callback toggled(bool);
+
+    height: 24px;
+    width: label == "" ? 24px : layout.preferred-width;
+
+    layout := HorizontalLayout {
+        spacing: Theme.spacing-xs;
+        alignment: start;
+
+        // The box itself
+        box := Rectangle {
+            width: 20px;
+            height: 20px;
+            border-radius: self.height / 2;
+            border-width: Theme.border-thin;
+            border-color: root.disabled ? Theme.text-muted
+                : root.checked ? Theme.border-selected
+                : touch.has-hover ? Theme.border-gray
+                : Theme.border-gray;
+            background: root.disabled ? Theme.surface
+                : root.checked ? Theme.button-tertiary
+                : Theme.surface;
+
+            animate background, border-color {
+                duration: 150ms;
+                easing: ease-in-out;
+            }
+
+            // Checkmark
+            if root.checked : Image {
+                width: 14px;
+                height: 14px;
+                source: Icon.check;
+                colorize: #FFFFFF;
+            }
+
+            drop-shadow-color: Theme.shadow;
+            drop-shadow-blur: Theme.shadow-medium;
+        }
+
+        // Label
+        if root.label != "" : Text {
+            y: -1px;
+            text: root.label;
+            color: root.disabled ? Theme.text-muted : Theme.text-secondary;
+            font-size: Theme.font-small;
+            font-family: Theme.font-family;
+            font-weight: Theme.weight-normal;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: !root.disabled;
+        mouse-cursor: root.disabled ? MouseCursor.not-allowed : MouseCursor.pointer;
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+}

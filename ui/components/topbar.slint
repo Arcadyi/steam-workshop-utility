@@ -1,47 +1,49 @@
 import { Theme, Icon } from "../theme.slint";
-import { Button, Switch } from "std-widgets.slint";
 import { SwitchButton } from "switch_button.slint";
 import { TooltipArea } from "tooltip.slint";
 import { ButtonIcon } from "icon_button.slint";
+import { Container } from "container.slint";
+import { SearchBar } from "search_bar.slint";
+import { Checkbox } from "checkbox.slint";
 
-export component TopBar inherits Rectangle {
-    height: 45px;
-
-    HorizontalLayout {
-        padding-left: Theme.spacing-sm;
-        padding-right: Theme.spacing-sm;
-        padding-bottom: Theme.spacing-xs;
-        spacing: Theme.spacing-xxs;
-        alignment: stretch;
-
-        Rectangle {
-            background: Theme.surface;
-            border-radius: self.height / 2;
-            horizontal-stretch: 1;
+export component TopBar inherits HorizontalLayout {
+    padding-left: Theme.spacing-sm;
+    padding-right: Theme.spacing-sm;
+    alignment: stretch;
+    Container {
+        background: Theme.surface;
+        clip: true;
+        height: 48px;
+        VerticalLayout {
+            padding-left: Theme.spacing-xs;
+            padding-right: Theme.spacing-xs;
+            alignment: center;
 
             HorizontalLayout {
-                padding-left: Theme.spacing-xs;
-                padding-right: Theme.spacing-xs;
-                spacing: Theme.spacing-xxs;
-                horizontal-stretch: 0;
-                alignment: start;
-                Image {
-                    source: Icon.game;
-                    colorize: Theme.gradient-horizontal;
-                    width: 24px;
-                    height: 24px;
-                    y: (parent.height - self.height) / 2;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+                alignment: stretch;
+                spacing: Theme.spacing-xs;
+                VerticalLayout {
+                    alignment: center;
+                    Checkbox {
+                        label: "15 Item(s)";
+                        // Todo: Make this select all
+                        toggled(val) => {
+                        }
+                    }
                 }
-                Text {
-                    vertical-alignment: center;
-                    text: "Games";
-                    color: Theme.text-primary;
-                    font-size: Theme.font-subheading;
-                    font-weight: Theme.weight-normal;
-                    font-family: Theme.font-family;
+                SearchBar {
+                    horizontal-stretch: 1;
                 }
+
+                VerticalLayout {
+                alignment: center;
+                    ButtonIcon {
+                        width: 36px;
+                        height: 36px;
+                        border-radius: self.height / 2;
+                    }
+                }
+
             }
         }
     }

@@ -1,0 +1,94 @@
+import { Container } from "container.slint";
+import { Icon, Theme } from "../theme.slint";
+
+export component SearchBar inherits Container {
+    in-out property <string> text <=> input.text;
+    in property <string> placeholder: "Search...";
+    callback accepted(string);
+    callback edited(string);
+
+    height: 36px;
+    border-radius: Theme.radius-xl;
+    border-color: input.has-focus ? Theme.border-light : Theme.border-gray;
+    border-width: Theme.border-thin;
+    background: Theme.button;
+
+    animate border-color { duration: 150ms; }
+
+    // FocusScope catches clicks outside and clears focus
+    FocusScope {
+        key-pressed(e) => {
+            input.focus();
+            EventResult.reject  // let input handle the key
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-xs;
+        padding-right: Theme.spacing-xs;
+        spacing: Theme.spacing-xxs;
+
+        VerticalLayout {
+            alignment: center;
+            Image {
+                width: 16px;
+                height: 16px;
+                source: Icon.search;
+                colorize: input.has-focus ? Theme.text-primary : Theme.text-muted;
+                animate colorize { duration: 150ms; }
+            }
+        }
+
+        input := TextInput {
+            vertical-alignment: center;
+            font-size: Theme.font-body;
+            font-family: Theme.font-family;
+            color: Theme.text-primary;
+            selection-background-color: Theme.accent;
+            selection-foreground-color: Theme.text-inverse;
+            single-line: true;
+            accepted => { root.accepted(self.text); }
+            edited => { root.edited(self.text); }
+        }
+
+        if input.text == "" : Text {
+            text: root.placeholder;
+            color: Theme.text-muted;
+            font-size: Theme.font-body;
+            font-family: Theme.font-family;
+            vertical-alignment: center;
+        }
+
+        if input.text != "" : VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                background: clear-touch.has-hover ? Theme.text-secondary : Theme.text-muted;
+                animate background { duration: 100ms; }
+
+                Image {
+                    width: 10px;
+                    height: 10px;
+                    source: Icon.close;
+                    colorize: Theme.text-inverse;
+                }
+
+                // Clear touch is inside the layout, not under the outer TouchArea
+                clear-touch := TouchArea {
+                    clicked => {
+                        root.text = "";
+                        input.focus();
+                    }
+                }
+            }
+        }
+    }
+
+    // Click the bar itself (not clear button) to focus
+    bar-touch := TouchArea {
+        width: 24px;
+        clicked => { input.focus(); }
+    }
+}

@@ -10,7 +10,7 @@ export component NavButton inherits Rectangle {
 
     in property <brush> background_color: Theme.surface;
     in property <brush> text_color: touch-click.has-hover ? Theme.text-inverse : Theme.text-primary;
-    in property <brush> hover_color: Theme.button-secondary;
+    in property <brush> hover_color: Theme.dark-mode ? Theme.button-tertiary : Theme.button-secondary;
     in property <brush> click_color: Theme.button;
 
     callback on_click();
@@ -18,7 +18,7 @@ export component NavButton inherits Rectangle {
 
     private property <bool> clicked: false;
 
-    border-color: Theme.border-gray;
+    border-color: touch-click.has-hover && Theme.dark-mode ? Theme.border-selected :  Theme.border-gray;
     border-width: Theme.border-thin;
 
     height: 28px;

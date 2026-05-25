@@ -1,21 +1,60 @@
 import { Theme } from "theme.slint";
+import { TitleBar } from "components/titlebar.slint";
+import { TopBar } from "components/topbar.slint";
 import { LoadingScreen } from "components/loading_screen.slint";
+import { HDivider, VDivider } from "components/divider.slint";
+import { Sidebar } from "components/sidebar.slint";
 
 export component AppWindow inherits Window {
-    no-frame: true; // Hides topbar
-    // TODO: Make custom hotbar
+    title: "Steam Workshop Utility";
+    no-frame: true;
+    preferred-width: 1200px;
+    preferred-height: 800px;
+    min-width: 800px;
+    min-height: 500px;
     in-out property <bool> loading: true;
+    in-out property <float> progress: 0.0;
+    in-out property <string> status-text: "Loading...";
+    in-out property <string> app-version: "v0.7.4";
+
+
+    callback drag(length, length);
+    callback minimize();
+    callback maximize();
+    callback close-window();
 
     background: Theme.background;
 
-    if loading : LoadingScreen {
-        status-text: "Loading workshop data...";
-    }
+    VerticalLayout {
+        spacing: 0px;
 
-    if !loading : Rectangle {
-        Text {
-            text: "Main App";
-            color: Theme.text-primary;
+        TitleBar {
+            app_version: root.app-version;
+            drag(dx, dy) => { root.drag(dx, dy); }
+            minimize => { root.minimize(); }
+            maximize => { root.maximize(); }
+            close => { root.close-window(); }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+
+            if loading : LoadingScreen {
+                status-text: root.status-text;
+                progress: root.progress;
+            }
+            if !loading : Rectangle {
+                Rectangle {
+                    HorizontalLayout {
+                        Sidebar {
+                            vertical-stretch: 1;
+                        }
+                        TopBar {
+                            horizontal-stretch: 1;
+                        }
+                    }
+                }
+            }
         }
     }
 }

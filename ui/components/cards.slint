@@ -1,0 +1,191 @@
+
+import { Container } from "container.slint";
+import { Theme, Icon } from "../theme.slint";
+import { ButtonIcon } from "icon_button.slint";
+import { HDivider, VDivider } from "divider.slint";
+import { SidebarEntryData } from "data.slint";
+export component NavbarCard inherits Container {
+    in-out property <SidebarEntryData> data;
+    in property <bool> selected;
+    in-out property <bool> small;
+    width: small ? 256px : 32px ;
+    height: small ? 150px : 32px ;
+    clip: true;
+
+    border-radius: small ? Theme.radius-xs : Theme.radius-md;
+    callback on_click(SidebarEntryData);
+    callback on_hover(bool);
+    private property <bool> clicked: false;
+
+    animate border-radius, width {
+        duration: 100ms;
+    }
+    background: selected ? Theme.button-tertiary.darker(0.9) : clicked ? Theme.button-tertiary
+        : touch-click.has-hover ? Theme.button
+        : Theme.surface;
+    drop-shadow-color: Theme.shadow;
+    drop-shadow-blur: Theme.shadow-soft;
+
+    border-color: selected ? Theme.border-light : Theme.border-gray;
+    border-width: selected && !small ? Theme.border-normal : Theme.border-thin;
+
+    HorizontalLayout {
+        alignment: start;
+        spacing: Theme.spacing-xs;
+        padding-right: small ? Theme.spacing-sm : 0px;
+        padding-top: small ? Theme.spacing-sm : 0px;
+        padding-bottom: small ? Theme.spacing-sm : 0px;
+        padding-left: small ? Theme.spacing-sm : 0px;
+        horizontal-stretch: 1;
+        Container {
+            clip: true;
+            width: 32px;
+            height: 32px;
+            HorizontalLayout {
+                alignment: center;
+                VerticalLayout {
+                    alignment: center;
+                    Image {
+                        width: 32px;
+                        height: 32px;
+                        source: Icon.icon_test;
+                    }
+                }
+            }
+            drop-shadow-color: Theme.shadow;
+            drop-shadow-blur: Theme.shadow-medium;
+        }
+
+        VDivider {}
+        VerticalLayout {
+            spacing: Theme.spacing-xxxs;
+            width: 190px;
+            Container {
+                height: 71px;
+                width: 189px;
+                border-radius: Theme.radius-xs;
+                clip: true;
+                Image {
+                    height: 71px;
+                    width: 189px;
+                    source: Icon.capsule_test;
+                }
+                drop-shadow-color: Theme.shadow;
+                drop-shadow-blur: Theme.shadow-soft;
+            }
+            Text {
+                vertical-alignment: center;
+                text: "Europa Universalis V";
+                color: Theme.text-primary;
+                font-size: Theme.font-body;
+                font-weight: Theme.weight-semibold;
+                font-family: Theme.font-family;
+                overflow: elide;
+            }
+            HDivider {}
+            HorizontalLayout {
+                HorizontalLayout {
+                    horizontal-stretch: 3;
+                    padding-left: Theme.spacing-xs;
+                    padding-right: Theme.spacing-xs;
+                    alignment: start;
+                    spacing: Theme.spacing-xxs;
+                    VerticalLayout {
+                        alignment: center;
+                        Image {
+                            source: Icon.steamdb;
+                            colorize: Theme.text-primary;
+                            width: 14px;
+                            height: 14px;
+                        }
+                    }
+                    Text {
+                        vertical-alignment: center;
+                        text: "19 Items";
+                        color: Theme.text-primary;
+                        font-size: Theme.font-small;
+                        font-weight: Theme.weight-medium;
+                        font-family: Theme.font-family;
+                    }
+                }
+                VDivider {}
+                HorizontalLayout {
+                    horizontal-stretch: 1;
+                    padding-left: Theme.spacing-xs;
+                    padding-right: Theme.spacing-xs;
+                    alignment: start;
+                    spacing: Theme.spacing-xxxs;
+                    VerticalLayout {
+                        alignment: center;
+                        Image {
+                            source: Icon.check;
+                            colorize: Theme.success;
+                            width: 20px;
+                            height: 20px;
+                        }
+                    }
+                    Text {
+                        vertical-alignment: center;
+                        text: "8";
+                        color: Theme.text-primary;
+                        font-size: Theme.font-small;
+                        font-weight: Theme.weight-medium;
+                        font-family: Theme.font-family;
+                    }
+                }
+                VDivider {}
+                    HorizontalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        spacing: Theme.spacing-xxxs;
+                        padding-left: Theme.spacing-xs;
+                        padding-right: Theme.spacing-xs;
+                        VerticalLayout {
+                            alignment: center;
+                            Image {
+                                source: Icon.cross;
+                                colorize: Theme.danger;
+                                width: 20px;
+                                height: 20px;
+                            }
+                        }
+                        Text {
+                            vertical-alignment: center;
+                            text: "11";
+                            color: Theme.text-primary;
+                            font-size: Theme.font-small;
+                            font-weight: Theme.weight-medium;
+                            font-family: Theme.font-family;
+                        }
+                    }
+            }
+
+        }
+
+
+    }
+
+    touch-click := TouchArea {
+            clicked => {
+                root.clicked = true;
+                root.on_click(data);
+                reset-timer.running = true;
+            }
+            changed has-hover => {
+                root.on_hover(self.has-hover);
+            }
+    }
+
+    reset-timer := Timer {
+        interval: 90ms;
+        running: false;
+        triggered => {
+            root.clicked = false;
+            self.running = false;
+        }
+    }
+
+    //Container {
+    //    background: Theme.button-secondary;
+    //}
+}

@@ -1,0 +1,55 @@
+import { Theme } from "../theme.slint";
+
+export component SwitchButton inherits Rectangle {
+    in-out property <bool> toggled: false;
+    callback toggled-changed(bool);
+
+    border-radius: self.height / 2;
+    background: Theme.button;
+    preferred-width: 48px;
+    preferred-height: 24px;
+    clip: true;
+
+    border-color: Theme.border-gray;
+    border-width: 1px;
+
+    animate background {
+        duration: 250ms;
+        easing: ease-in-out;
+    }
+
+    TouchArea {
+        mouse-cursor: pointer;
+
+        clicked => {
+            root.toggled = !root.toggled;
+            root.toggled-changed(root.toggled);
+        }
+
+        Rectangle {
+            border-radius: self.height / 2;
+            width: parent.has-hover ?  parent.width / 2 : parent.width / 2.5;
+            height: parent.has-hover ? parent.height / 1.2 : parent.height / 1.5;
+
+            y: (parent.height - self.height) / 2;
+            x: root.toggled
+                ? parent.width - self.width - Theme.spacing-xxs
+                : Theme.spacing-xxs;
+
+            background: parent.has-hover
+                ? Theme.button
+                : Theme.button-secondary;
+
+            border-color: Theme.border-gray;
+            border-width: 1px;
+
+            drop-shadow-color: Theme.shadow;
+            drop-shadow-blur: 3px;
+
+            animate x, background {
+                duration: 250ms;
+                easing: ease-in-out;
+            }
+        }
+    }
+}

@@ -1,0 +1,68 @@
+import { Theme } from "../theme.slint";
+
+export component NavButton inherits Rectangle {
+    in property <string> title: "Title";
+
+    in property <image> icon;
+    in property <brush> icon_color: Theme.button-secondary;
+    in property <length> icon_size_x: 24px;
+    in property <length> icon_size_y: 24px;
+
+    in property <brush> background_color: Theme.surface;
+    in property <brush> text_color: Theme.text-primary;
+    in property <brush> hover_color: Theme.button;
+    in property <brush> click_color: Theme.button-tertiary;
+
+    callback on_click();
+    callback on_hover(bool);
+
+    private property <bool> clicked: false;
+
+    border-color: Theme.border-gray;
+    border-width: Theme.border-thin;
+
+    height: 28px;
+
+    background: clicked ? click_color
+        : touch-click.has-hover ? hover_color
+        : background_color;
+
+    animate width {
+        duration: 300ms;
+        easing: ease-out;
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        Rectangle {
+            Image {
+                source: icon;
+                colorize: icon_color;
+                width: icon_size_x;
+                height: icon_size_y;
+            }
+        }
+    }
+
+
+
+    touch-click := TouchArea {
+        clicked => {
+            root.clicked = true;
+            root.on_click();
+            reset-timer.running = true;
+        }
+        changed has-hover => {
+            root.on_hover(self.has-hover);
+        }
+    }
+
+    reset-timer := Timer {
+        interval: 90ms;
+        running: false;
+        triggered => {
+            root.clicked = false;
+            self.running = false;
+        }
+    }
+}

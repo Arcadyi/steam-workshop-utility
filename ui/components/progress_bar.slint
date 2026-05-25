@@ -1,0 +1,23 @@
+import { Theme } from "../theme.slint";
+
+export component ProgressBar inherits Rectangle {
+    in property <float> progress: 0.65;
+    height: 10px;
+    border-radius: self.height / 2;
+    background: Theme.surface;
+    border-color: Theme.border-gray;
+    border-width: Theme.border-thin;
+
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width * root.progress;
+        height: parent.height;
+        background: Theme.gradient-horizontal-color;
+        border-radius: parent.height / 2;
+        animate width {
+            duration: 150ms;
+            easing: ease;
+        }
+    }
+}

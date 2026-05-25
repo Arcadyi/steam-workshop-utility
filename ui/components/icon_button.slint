@@ -1,0 +1,59 @@
+import { Theme } from "../theme.slint";
+
+
+export component ButtonIcon inherits Rectangle {
+    in property <image> icon;
+    in property <brush> icon_color: Theme.button-secondary;
+    in property <brush> icon_color_hover: Theme.button;
+    in property <brush> background_color: Theme.button;
+    in property <brush> hover_color: Theme.button-secondary;
+    in property <brush> click_color: Theme.button-tertiary;
+    in property <length> icon_size_x: 14px;
+    in property <length> icon_size_y: 14px;
+    callback on_click();
+    callback on_hover(bool);
+
+    border-color: Theme.border-gray;
+    border-width: Theme.border-thin;
+
+    private property <bool> clicked: false;
+
+    width: 28px;
+    height: 28px;
+
+    background: clicked ? click_color : touch-click.has-hover ? hover_color : background_color;
+
+    animate background {
+        duration: 300ms;
+        easing: ease-out;
+    }
+
+    Image {
+        source: icon;
+        colorize: touch-click.has-hover ? icon_color_hover : icon_color;
+        width: icon_size_x;
+        height: icon_size_y;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    touch-click := TouchArea {
+        clicked => {
+            root.clicked = true;
+            root.on_click();
+            reset-timer.running = true;
+        }
+        changed has-hover => {
+            root.on_hover(self.has-hover);
+        }
+    }
+
+    reset-timer := Timer {
+        interval: 90ms;
+        running: false;
+        triggered => {
+            root.clicked = false;
+            self.running = false;
+        }
+    }
+}

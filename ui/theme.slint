@@ -1,72 +1,76 @@
+import "../../resources/fonts/DM_Sans/DMSans-VariableFont_opsz,wght.ttf";
 export global Theme {
 
     // Mode
     in-out property <bool> dark-mode: true;
 
     // Backgrounds / Surfaces
-    out property <color> background:
-        dark-mode ? #0f172a : #f3f4f6;
+    out property <brush> background: dark-mode ? #121212: #E5E5E5;
+    out property <brush> surface: dark-mode ?
+        @linear-gradient(40deg, #141414 0%, #1F1F1F 100%) : #FFFFFF;
+    out property <brush> shadow: dark-mode ? #0A0A0A : #292929;
 
-    out property <color> background-elevated:
-        dark-mode ? #111827 : #ffffff;
-
-    out property <color> surface:
-        dark-mode ? #1e293b : #ffffff;
-
-    out property <color> surface-alt:
-        dark-mode ? #273449 : #e5e7eb;
-
-    out property <color> surface-hover:
-        dark-mode ? #334155 : #dbe4f0;
-
-    out property <color> surface-active:
-        dark-mode ? #3b475c : #cfd8e3;
+    // Buttons
+    out property <brush> button: background;
+    out property <brush> button-secondary: gradient-vertical;
+    out property <brush> button-tertiary: surface;
 
     // Borders
-    out property <color> border:
-        dark-mode ? #334155 : #d1d5db;
-
-    out property <color> border-strong:
-        dark-mode ? #475569 : #9ca3af;
+    out property <brush> border-light: dark-mode ? #858585 : #FFFFFF;
+    out property <brush> border-gray: dark-mode ? #525252 : #D6D6D6;
+    out property <length> border-thin: 1px;
+    out property <length> border-normal: 2px;
+    out property <length> border-medium: 4px;
+    out property <length> border-thick: 6px;
 
     // Text
-    out property <color> text-primary:
-        dark-mode ? #ffffff : #111827;
-
-    out property <color> text-secondary:
-        dark-mode ? #cbd5e1 : #4b5563;
-
-    out property <color> text-muted:
-        dark-mode ? #94a3b8 : #6b7280;
-
-    out property <color> text-inverse:
-        dark-mode ? #111827 : #ffffff;
+    out property <brush> text-primary: dark-mode ? #FFFFFF: #141414;
+    out property <brush> text-secondary: dark-mode ? #8F8F8F : #292929;
+    out property <brush> text-muted: dark-mode ? #474747 : #A3A3A3;
+    out property <brush> text-inverse: background;
 
     // Accent / Brand
-    out property <color> primary:
-        dark-mode ? #3b82f6 : #2563eb;
+    out property <brush> primary: dark-mode ? #8F8F8F: #1F1F1F;
+    out property <brush> secondary: dark-mode ? #CCCCCC: #3D3D3D;
+    out property <brush> accent: dark-mode ? #2AB0D5: #2AB0D5;
 
-    out property <color> primary-hover:
-        dark-mode ? #60a5fa : #3b82f6;
+    out property <brush> gradient-horizontal:
+        dark-mode ?
+            @linear-gradient(50deg, primary 0%, secondary 100%) :
+            @linear-gradient(50deg, primary 0%, secondary 100%);
 
-    out property <color> primary-pressed:
-        dark-mode ? #2563eb : #1d4ed8;
+    out property <brush> gradient-horizontal-color:
+        dark-mode ?
+            @linear-gradient(60deg, #5A8D16 0%, #3C91E6 100%) :
+            @linear-gradient(60deg, #5A8D16 0%, #3C91E6 100%);
 
-    out property <color> primary-foreground:
-        #ffffff;
+    out property <brush> gradient-vertical:
+        dark-mode ?
+            @linear-gradient(0deg, primary 0%, secondary 100%) :
+            @linear-gradient(0deg, primary 0%, secondary 100%);
 
-    // Status Colors
-    out property <color> success:
-        dark-mode ? #22c55e : #16a34a;
 
-    out property <color> warning:
-        dark-mode ? #f59e0b : #d97706;
+    out property <brush> gradient-background-horizontal:
+        dark-mode ?
+            @linear-gradient(50deg, surface 0,  background 100%) :
+            @linear-gradient(50deg, surface 0,  background 100%);
 
-    out property <color> danger:
-        dark-mode ? #ef4444 : #dc2626;
+    out property <brush> gradient-background-vertical:
+        dark-mode ?
+            @linear-gradient(0deg, surface 0,  background 100%) :
+            @linear-gradient(0deg, surface 0,  background 100%);
 
-    out property <color> danger-hover:
-        dark-mode ? #f87171 : #ef4444;
+    // Status brushs
+    out property <brush> success:
+        dark-mode ?
+            @linear-gradient(0deg, #49B12F 0%, #76D45E 100%) :
+            @linear-gradient(0deg, #2F711E 0%, #49B12F 100%);
+    out property <brush> warning: dark-mode ? #FF7F1F : #FF7F1F;
+    out property <brush> danger:
+        dark-mode ?
+            @linear-gradient(0deg, #BD4F4F 0%, #CD7A7A 100%) :
+            @linear-gradient(0deg, #971313 0%, #C81919 100%);
+    out property <brush> danger-hover: dark-mode ? #FC4949 : #FC4949;
 
     // Typography
     out property <length> font-display: 34px;
@@ -77,90 +81,71 @@ export global Theme {
     out property <length> font-small: 13px;
     out property <length> font-tiny: 11px;
 
+    // Fonts
+    out property <string> font-family: "DM Sans";
+
     // Font Weights
-    out property <int> weight-normal:
-        400;
-
-    out property <int> weight-medium:
-        500;
-
-    out property <int> weight-semibold:
-        600;
-
-    out property <int> weight-bold:
-        700;
+    out property <int> weight-thin: 200;
+    out property <int> weight-normal: 400;
+    out property <int> weight-medium: 500;
+    out property <int> weight-semibold: 600;
+    out property <int> weight-bold: 700;
 
     // Spacing
-    out property <length> spacing-xxs:
-        4px;
-
-    out property <length> spacing-xs:
-        8px;
-
-    out property <length> spacing-sm:
-        12px;
-
-    out property <length> spacing-md:
-        16px;
-
-    out property <length> spacing-lg:
-        24px;
-
-    out property <length> spacing-xl:
-        32px;
-
-    out property <length> spacing-xxl:
-        48px;
+    out property <length> spacing-xxxxs: 1px;
+    out property <length> spacing-xxxs: 2px;
+    out property <length> spacing-xxs: 4px;
+    out property <length> spacing-xs: 8px;
+    out property <length> spacing-sm: 12px;
+    out property <length> spacing-md: 16px;
+    out property <length> spacing-lg: 24px;
+    out property <length> spacing-xl: 32px;
+    out property <length> spacing-xxl: 48px;
 
     // Radius
-    out property <length> radius-xs:
-        8px;
-
-    out property <length> radius-sm:
-        12px;
-
-    out property <length> radius-md:
-        16px;
-
-    out property <length> radius-lg:
-        22px;
-
-    out property <length> radius-xl:
-        999px;
+    out property <length> radius-xxs: 4px;
+    out property <length> radius-xs: 8px;
+    out property <length> radius-sm: 12px;
+    out property <length> radius-md: 16px;
+    out property <length> radius-lg: 22px;
+    out property <length> radius-xl: 999px;
 
     // Component Sizes
-    out property <length> topbar-height:
-        64px;
-
-    out property <length> sidebar-width:
-        260px;
-
-    out property <length> button-height:
-        44px;
-
-    out property <length> input-height:
-        44px;
-
-    out property <length> card-padding:
-        20px;
+    out property <length> topbar-height: 64px;
+    out property <length> sidebar-width: 260px;
+    out property <length> button-height: 44px;
+    out property <length> input-height: 44px;
+    out property <length> card-padding: 20px;
 
     // Shadows (Opacity Tokens)
-    out property <float> shadow-soft:
-        dark-mode ? 0.25 : 0.08;
-
-    out property <float> shadow-medium:
-        dark-mode ? 0.35 : 0.14;
-
-    out property <float> shadow-strong:
-        dark-mode ? 0.5 : 0.2;
+    out property <length> shadow-soft: dark-mode ? 10px : 2px;
+    out property <length> shadow-medium: dark-mode ? 1px : 3px;
+    out property <length> shadow-strong: dark-mode ? 5px : 2px;
 
     // Animation
-    out property <duration> animation-fast:
-        100ms;
+    out property <duration> animation-fast: 100ms;
+    out property <duration> animation-normal: 180ms;
+    out property <duration> animation-slow: 300ms;
+}
 
-    out property <duration> animation-normal:
-        180ms;
+export global Icon {
+    out property <image> check: @image-url("../resources/icons/check.svg");
+    out property <image> close: @image-url("../resources/icons/close.svg");
+    out property <image> cross: @image-url("../resources/icons/cross.svg");
+    out property <image> double_arrow_l: @image-url("../resources/icons/double_arrow_left.svg");
+    out property <image> double_arrow_r: @image-url("../resources/icons/double_arrow_right.svg");
+    out property <image> folder: @image-url("../resources/icons/folder.svg");
+    out property <image> game: @image-url("../resources/icons/game.svg");
+    out property <image> import_: @image-url("../resources/icons/import.svg");
+    out property <image> maximize: @image-url("../resources/icons/maximize.svg");
+    out property <image> minimize: @image-url("../resources/icons/minimize.svg");
+    out property <image> question_mark: @image-url("../resources/icons/question_mark.svg");
+    out property <image> remove: @image-url("../resources/icons/remove.svg");
+    out property <image> share: @image-url("../resources/icons/share.svg");
+    out property <image> steam: @image-url("../resources/icons/steam.svg");
+    out property <image> steamdb: @image-url("../resources/icons/steamdb.svg");
 
-    out property <duration> animation-slow:
-        300ms;
+    // TODO: Remove this
+    out property <image> capsule_test: @image-url("../resources/test/capsule.jpg");
+    out property <image> icon_test: @image-url("../resources/test/icon.jpg");
 }

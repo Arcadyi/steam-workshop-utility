@@ -1,0 +1,104 @@
+
+import { ButtonIcon } from "icon_button.slint";
+import { Theme, Icon } from "../theme.slint";
+import { NavButton } from "nav_button.slint";
+import { Container } from "container.slint";
+import { NavbarCard } from "cards.slint";
+import { ScrollView } from "std-widgets.slint";
+import { SidebarEntryData } from "data.slint";
+
+export component Sidebar inherits Rectangle {
+    in-out property <bool> toggled : false;
+    in-out property <[SidebarEntryData]> entries;
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-sm;
+        padding-bottom: Theme.spacing-xs;
+        alignment: stretch;
+
+        VerticalLayout {
+            NavButton {
+                border-radius: self.height / 2;
+                icon: toggled ? Icon.double_arrow_l : Icon.double_arrow_r;
+                icon_size_x: 24px;
+                icon_size_y: 24px;
+
+                border-bottom-left-radius: 0;
+                border-bottom-right-radius: 0;
+
+                title: "Games";
+                text_color: Theme.text-inverse;
+
+                on_hover(is-hovered) => {
+                }
+                on_click => {
+                    toggled = !toggled;
+                }
+            }
+
+            Container {
+                background: Theme.surface;
+                clip: true;
+                width: toggled ? 264px : 40px;
+                border-top-left-radius: 0;
+                border-top-right-radius: 0;
+                border-bottom-left-radius: Theme.radius-md;
+                border-bottom-right-radius: Theme.radius-md;
+
+                border-color: Theme.border-gray;
+                border-width: Theme.border-thin;
+
+                animate width {
+                    duration: 50ms;
+                    easing: ease-out;
+                }
+                ScrollView {
+                    width: parent.width;
+                    vertical-scrollbar-policy: as-needed;
+
+                    animate width {
+                        duration: 200ms;
+                        easing: ease-out;
+                    }
+                    VerticalLayout {
+                        padding-left: Theme.spacing-xxs;
+                        padding-right: Theme.spacing-xxs;
+                        padding-top: Theme.spacing-xxs;
+                        spacing: Theme.spacing-xxs;
+                        alignment: start;
+                        vertical-stretch: 0;
+                        // TODO: hook this up
+                        for entry in root.entries : NavbarCard {
+                            NavbarCard {
+                                data: entry;
+                            }
+                        }
+                        NavbarCard {
+                            small: toggled;
+                            selected: true;
+                        }
+                        NavbarCard {
+                            small: toggled;
+                        }
+                        NavbarCard {
+                            small: toggled;
+                        }
+                        NavbarCard {
+                            small: toggled;
+                        }
+                        NavbarCard {
+                            small: toggled;
+                        }
+                        NavbarCard {
+                            small: toggled;
+                        }
+                        NavbarCard {
+                            small: toggled;
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+}

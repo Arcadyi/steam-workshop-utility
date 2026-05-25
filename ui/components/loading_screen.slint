@@ -1,33 +1,51 @@
-import { Theme } from "../theme.slint";
+import { Theme, Icon } from "../theme.slint";
+import { ProgressBar } from "progress_bar.slint";
+import { Spinner } from "std-widgets.slint";
 
 export component LoadingScreen inherits Rectangle {
 
     in property <string> status-text: "Loading...";
+    in property <float> progress: 0.0;
 
-    background: Theme.background;
 
     VerticalLayout {
         spacing: Theme.spacing-lg;
+        padding: Theme.spacing-xxl;
         alignment: center;
 
-        Image {
-            source: @image-url("../../resources/icons/steam.svg");
-            colorize: Theme.primary;
-            width: 128px;
-            height: 128px;
-            x: (parent.width - self.width) / 2;
+        HorizontalLayout {
+            alignment: center;
+            Image {
+                source: Icon.steam;
+                colorize: Theme.gradient-vertical;
+                width: 128px;
+                height: 128px;
+            }
         }
 
         Text {
             horizontal-stretch: 1;
-
-            text: root.status-text;
-
+            text: "Steam Workshop Utility";
             color: Theme.text-primary;
-
+            font-family: Theme.font-family;
             font-size: Theme.font-heading;
             font-weight: Theme.weight-semibold;
+            horizontal-alignment: center;
+        }
 
+        ProgressBar {
+            progress: root.progress;
+
+            drop-shadow-color: Theme.shadow;
+            drop-shadow-blur: 6px;
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.status-text;
+            color: Theme.text-muted;
+            font-family: Theme.font-family;
+            font-size: Theme.font-small;
             horizontal-alignment: center;
         }
     }

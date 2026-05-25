@@ -1,0 +1,48 @@
+import { Theme, Icon } from "../theme.slint";
+import { Button, Switch } from "std-widgets.slint";
+import { SwitchButton } from "switch_button.slint";
+import { TooltipArea } from "tooltip.slint";
+import { ButtonIcon } from "icon_button.slint";
+
+export component TopBar inherits Rectangle {
+    height: 45px;
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-sm;
+        padding-right: Theme.spacing-sm;
+        padding-bottom: Theme.spacing-xs;
+        spacing: Theme.spacing-xxs;
+        alignment: stretch;
+
+        Rectangle {
+            background: Theme.surface;
+            border-radius: self.height / 2;
+            horizontal-stretch: 1;
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-xs;
+                padding-right: Theme.spacing-xs;
+                spacing: Theme.spacing-xxs;
+                horizontal-stretch: 0;
+                alignment: start;
+                Image {
+                    source: Icon.game;
+                    colorize: Theme.gradient-horizontal;
+                    width: 24px;
+                    height: 24px;
+                    y: (parent.height - self.height) / 2;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                Text {
+                    vertical-alignment: center;
+                    text: "Games";
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subheading;
+                    font-weight: Theme.weight-normal;
+                    font-family: Theme.font-family;
+                }
+            }
+        }
+    }
+}

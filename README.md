@@ -1,8 +1,4 @@
-# Steam Workshop Utility
-
 A native Linux (& Windows compatible) desktop application for managing Steam Workshop items — browse your subscribed mods, identify out-of-date content, and force a clean redownload directly from Steam.
-
-Built with [COSMIC](https://github.com/pop-os/libcosmic).
 
 ---
 
@@ -44,5 +40,3 @@ An item is **Out of Date** when its remote timestamp is newer than the local one
 3. Opens `steam://workshop_download_item/<_appid>/<itemid>` for each item
 4. Opens `steam://validate/<_appid>` to prompt Steam to verify and queue downloads
 5. Polls the local filesystem every second, comparing timestamps until all items are resolved or 5 minutes elapse
-
-
